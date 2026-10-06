@@ -94,3 +94,7 @@ npx tauri build --bundles nsis       # installer   -> src-tauri/target/release/b
 The frontend is Svelte 5 and TypeScript, bundled with Vite. The backend is a small amount of Rust for file access and config storage.
 
 Pushing a tag like `v0.2.0` runs the release workflow, which builds both Windows files and publishes them to a GitHub release. The tag has to match the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`.
+
+## License
+
+[MIT](LICENSE)
