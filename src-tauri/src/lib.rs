@@ -19,12 +19,31 @@ fn mtime_ms(p: &Path) -> Result<u64, String> {
     Ok(t.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0))
 }
 
+/// Absolute, symlink-resolved path with Windows' `\\?\` prefix removed, so the
+/// same file always yields the same string no matter how it was spelled.
+fn canon(p: &Path) -> String {
+    let c = fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let s = c.to_string_lossy().into_owned();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        s
+    }
+}
+
+#[tauri::command]
+fn canonical_path(path: String) -> String {
+    canon(Path::new(&path))
+}
+
 #[tauri::command]
 fn read_file(path: String) -> Result<FileData, String> {
     let p = Path::new(&path);
     let size = fs::metadata(p).map_err(|e| e.to_string())?.len();
     let mtime = mtime_ms(p)?;
-    let path = p.to_string_lossy().into_owned();
+    let path = canon(p);
 
     if size > MAX_BYTES {
         return Ok(FileData {
@@ -49,28 +68,38 @@ fn file_mtime(path: String) -> Result<u64, String> {
     mtime_ms(Path::new(&path))
 }
 
-fn file_args<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
-    args.into_iter().skip(1).filter(|a| Path::new(a).is_file()).collect()
+/// File arguments (skipping argv[0]); relative paths resolve against `cwd`,
+/// which for a second launch is that process's directory, not ours.
+fn file_args<I: IntoIterator<Item = String>>(args: I, cwd: Option<&str>) -> Vec<String> {
+    args.into_iter()
+        .skip(1)
+        .map(|a| match cwd {
+            Some(c) if Path::new(&a).is_relative() => Path::new(c).join(a),
+            _ => a.into(),
+        })
+        .filter(|p| p.is_file())
+        .map(|p| canon(&p))
+        .collect()
 }
 
 #[tauri::command]
 fn initial_files() -> Vec<String> {
-    file_args(std::env::args())
+    file_args(std::env::args(), None)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.unminimize();
                 let _ = w.show();
                 let _ = w.set_focus();
             }
-            let _ = app.emit("open-files", file_args(args));
+            let _ = app.emit("open-files", file_args(args, Some(&cwd)));
         }))
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![read_file, file_mtime, initial_files])
+        .invoke_handler(tauri::generate_handler![read_file, file_mtime, initial_files, canonical_path])
         .run(tauri::generate_context!())
         .expect("error while running Codepad");
 }

@@ -11,6 +11,7 @@ import { languages } from '@codemirror/language-data';
 import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { defaultKeymap } from '@codemirror/commands';
 import { tags as t } from '@lezer/highlight';
+import { createPalette } from './palette.js';
 
 const $ = (id) => document.getElementById(id);
 const win = getCurrentWindow();
@@ -158,6 +159,12 @@ function closeTab(tb) {
   else { renderTabs(); persist(); }
 }
 
+function closeAll() {
+  tabs.splice(0);
+  active = null;
+  activate(null);
+}
+
 function cycle(dir) {
   if (tabs.length < 2) return;
   activate(tabs[(tabs.indexOf(active) + dir + tabs.length) % tabs.length]);
@@ -174,18 +181,30 @@ async function readInto(path) {
   return { data, name, state: makeState(doc ?? '', lang), langLabel: lang.label };
 }
 
-async function openPath(path) {
-  const existing = tabs.find((t) => t.path.toLowerCase() === path.toLowerCase());
+const pending = new Map(); // canonical path -> in-flight open, so racing opens share one tab
+
+async function openPath(rawPath) {
+  const path = await invoke('canonical_path', { path: rawPath });
+  const key = path.toLowerCase();
+  const existing = tabs.find((t) => t.path.toLowerCase() === key);
   if (existing) { activate(existing); return; }
-  try {
-    const { data, name, state, langLabel } = await readInto(path);
-    const tb = { path: data.path, name, state, scroll: 0, mtime: data.mtime, missing: false, lang: langLabel };
-    tabs.push(tb);
-    pushRecent(data.path);
-    activate(tb);
-  } catch (e) {
-    console.error(e);
-  }
+  if (pending.has(key)) return pending.get(key);
+
+  const job = (async () => {
+    try {
+      const { data, name, state, langLabel } = await readInto(path);
+      const tb = { path: data.path, name, state, scroll: 0, mtime: data.mtime, missing: false, lang: langLabel };
+      tabs.push(tb);
+      pushRecent(data.path);
+      activate(tb);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      pending.delete(key);
+    }
+  })();
+  pending.set(key, job);
+  return job;
 }
 
 async function openPaths(paths) {
@@ -256,12 +275,31 @@ function setFs(v) {
 }
 setFs(fs);
 
+/* ---------- command palette ---------- */
+const commands = [
+  { title: 'Open File…', keys: 'Ctrl+O', run: pickFiles },
+  { title: 'Close Current File', keys: 'Ctrl+W', when: () => !!active, run: () => closeTab(active) },
+  { title: 'Close All Files', when: () => tabs.length > 0, run: closeAll },
+  { title: 'Close Codepad', keys: 'Ctrl+Q', run: () => win.close() },
+];
+
+const palette = createPalette(
+  () => commands.filter((c) => !c.when || c.when()),
+  () => { if (active) view.focus(); },
+);
+
 /* ---------- input ---------- */
 window.addEventListener('keydown', (e) => {
+  if (e.key === 'F1' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p')) {
+    e.preventDefault();
+    palette.toggle();
+    return;
+  }
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key;
-  if (k === 'o') { e.preventDefault(); pickFiles(); }
-  else if (k === 'w') { e.preventDefault(); if (active) closeTab(active); }
+  if (k === 'o') { e.preventDefault(); palette.close(); pickFiles(); }
+  else if (k === 'w') { e.preventDefault(); palette.close(); if (active) closeTab(active); }
+  else if (k === 'q') { e.preventDefault(); win.close(); }
   else if (k === 'Tab') { e.preventDefault(); cycle(e.shiftKey ? -1 : 1); }
   else if (k >= '1' && k <= '9') { e.preventDefault(); const tb = k === '9' ? tabs[tabs.length - 1] : tabs[+k - 1]; if (tb) activate(tb); }
   else if (k === '=' || k === '+') { e.preventDefault(); setFs(fs + 1); }
