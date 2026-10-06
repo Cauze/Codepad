@@ -5,7 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import type { EditorState } from '@codemirror/state';
 import * as editor from './editor';
-import { appState, loadConfig, pollSettings, saveState } from './config.svelte';
+import { appState, loadConfig, pollSettings, saveState, settings } from './config.svelte';
 
 interface FileData {
   path: string;
@@ -198,7 +198,7 @@ export async function boot(): Promise<void> {
   const fromArgs = await invoke<string[]>('initial_files');
   if (fromArgs.length) {
     await openPaths(fromArgs);
-  } else {
+  } else if (settings.startup === 'restore') {
     const s = { ...appState.session };
     for (const p of s.paths) await openPath(p).catch(() => {});
     const a = store.tabs.find((t) => t.path === s.active);

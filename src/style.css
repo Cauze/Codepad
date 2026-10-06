@@ -123,16 +123,21 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 .cm-editor .cm-searchMatch { background: color-mix(in srgb, var(--syn-meta) 30%, transparent); outline: 0; }
 .cm-editor .cm-searchMatch-selected { background: color-mix(in srgb, var(--syn-meta) 60%, transparent); }
 
-/* search panel */
-.cm-panels { background: var(--surface) !important; color: var(--fg); border-color: var(--border) !important; font-family: var(--ui); }
-.cm-panels .cm-panel.cm-search { padding: 8px 34px 8px 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.cm-panel.cm-search br { display: none; }
-.cm-panel.cm-search input, .cm-panel.cm-search button { font: 12px var(--ui); color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 3px 8px; margin: 0; }
-.cm-panel.cm-search input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
-.cm-panel.cm-search button { cursor: pointer; background: var(--tab-bg); }
-.cm-panel.cm-search button:hover { background: var(--border); }
-.cm-panel.cm-search label { font-size: 12px; color: var(--fg-dim); display: inline-flex; align-items: center; gap: 4px; }
-.cm-panel.cm-search [name=close] { position: absolute; top: 6px; right: 8px; background: none; border: 0; color: var(--fg-dim); font-size: 16px; }
+/* find widget: floats over the top-right of the editor instead of pushing the text down */
+.cm-editor .cm-panels.cm-panels-top { position: absolute; top: 0; right: 18px; left: auto; width: auto; background: none; border: 0; z-index: 30; }
+.cm-editor .cm-panels-top .cm-panel { background: none; padding: 0; }
+.find { display: flex; align-items: center; gap: 2px; padding: 6px 6px 6px 8px; background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 8px 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); font: 12px var(--ui); color: var(--fg); user-select: none; }
+.find-box { display: flex; align-items: center; width: 232px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding-right: 2px; }
+.find-box:focus-within { border-color: var(--accent); }
+.find-box.bad { border-color: var(--syn-tag); }
+.find-box input { flex: 1; min-width: 0; padding: 4px 7px; font: 12.5px var(--ui); color: var(--fg); background: none; border: 0; outline: none; user-select: text; }
+.find-box input::placeholder { color: var(--fg-faint); }
+.find button { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--fg-dim); cursor: pointer; font: 11.5px var(--mono); }
+.find button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 12%, transparent); color: var(--fg); }
+.find button:disabled { opacity: .35; cursor: default; }
+.find button.on { color: var(--fg); background: color-mix(in srgb, var(--accent) 24%, transparent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.find-count { min-width: 78px; padding: 0 8px; text-align: center; color: var(--fg-dim); white-space: nowrap; }
+.find-count.bad { color: var(--syn-tag); }
 .cm-editor .cm-content, .cm-editor .cm-line { user-select: text; }
 
 /* ---------- command palette ---------- */

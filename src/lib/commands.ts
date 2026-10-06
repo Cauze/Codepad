@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { DEFAULTS, changeSetting, meta, setFontSize, settings, type Theme } from './config.svelte';
+import { DEFAULTS, changeSetting, meta, setFontSize, settings, type Startup, type Theme } from './config.svelte';
 import * as editor from './editor';
 import { ask, closePalette, openList, pal, pick, type Item } from './palette.svelte';
 import { activate, closeAll, closeAllExcept, closeTab, cycle, openPath, pickFiles, store } from './tabs.svelte';
@@ -66,6 +66,12 @@ const theme = (name: Theme, label: string): Command => ({
   run: () => changeSetting('theme', name),
 });
 
+const startup = (name: Startup, label: string): Command => ({
+  title: `Startup: ${label}`,
+  when: () => settings.startup !== name,
+  run: () => changeSetting('startup', name),
+});
+
 export const commands: Command[] = [
   { title: 'Open File…', keys: 'Ctrl+O', run: () => void pickFiles() },
   { title: 'Switch Tab…', keys: 'Ctrl+P', when: hasTab, run: () => void switchTab() },
@@ -97,6 +103,9 @@ export const commands: Command[] = [
   theme('system', 'System'),
   theme('dark', 'Dark'),
   theme('light', 'Light'),
+
+  startup('restore', 'Reopen Last Files'),
+  startup('empty', 'Start Empty'),
 
   { title: 'Open Settings File', run: () => void openPath(meta.settingsPath) },
   { title: 'Close Codepad', keys: 'Ctrl+Q', run: () => void getCurrentWindow().close() },

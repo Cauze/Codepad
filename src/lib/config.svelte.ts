@@ -7,9 +7,13 @@ import { invoke } from '@tauri-apps/api/core';
  */
 
 export type Theme = 'system' | 'dark' | 'light';
+/** What to do at launch (when no files are passed on the command line). */
+export type Startup = 'restore' | 'empty';
 
 export interface Settings {
   theme: Theme;
+  /** "restore" reopens the tabs from last time; "empty" starts with none. */
+  startup: Startup;
   /** px, 9-28 */
   fontSize: number;
   /** e.g. "JetBrains Mono"; empty = built-in stack */
@@ -32,6 +36,7 @@ interface ConfigFile {
 
 export const DEFAULTS: Readonly<Settings> = Object.freeze({
   theme: 'system',
+  startup: 'restore',
   fontSize: 13.5,
   fontFamily: '',
   wordWrap: false,
@@ -52,6 +57,7 @@ function sanitize(raw: unknown): Settings {
     typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
   return {
     theme: o.theme === 'system' || o.theme === 'dark' || o.theme === 'light' ? o.theme : DEFAULTS.theme,
+    startup: o.startup === 'restore' || o.startup === 'empty' ? o.startup : DEFAULTS.startup,
     fontSize: num(o.fontSize, 9, 28, DEFAULTS.fontSize),
     fontFamily: typeof o.fontFamily === 'string' ? o.fontFamily.trim() : DEFAULTS.fontFamily,
     wordWrap: typeof o.wordWrap === 'boolean' ? o.wordWrap : DEFAULTS.wordWrap,

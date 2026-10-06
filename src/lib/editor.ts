@@ -6,6 +6,7 @@ import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/sea
 import { defaultKeymap } from '@codemirror/commands';
 import { tags as t } from '@lezer/highlight';
 import { settings } from './config.svelte';
+import { createFindPanel } from './findPanel';
 
 /*
  * The CodeMirror side. One EditorView is shared by all tabs; each tab keeps its own EditorState
@@ -81,7 +82,7 @@ export function makeState(doc: string, lang: Lang): EditorState {
       drawSelection(),
       bracketMatching(),
       highlightSelectionMatches(),
-      search({ top: true }),
+      search({ top: true, createPanel: createFindPanel }),
       syntaxHighlighting(highlight),
       keymap.of([...findKeys, ...foldKeymap, ...defaultKeymap]),
       lang.support,
