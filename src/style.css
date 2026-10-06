@@ -101,8 +101,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); c
 .logo { font: 600 56px var(--mono); color: var(--fg-faint); margin-bottom: 14px; letter-spacing: -2px; }
 kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); color: var(--fg); }
 #recent { list-style: none; padding: 0; margin: 26px auto 0; max-width: 460px; text-align: left; }
-#recent li { padding: 5px 10px; border-radius: 6px; cursor: pointer; display: flex; gap: 10px; justify-content: space-between; }
-#recent li:hover { background: var(--surface); color: var(--fg); }
+#recent button { width: 100%; padding: 5px 10px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; display: flex; gap: 10px; justify-content: space-between; }
+#recent button:hover, #recent button:focus-visible { background: var(--surface); color: var(--fg); outline: none; }
 #recent .rp { color: var(--fg-faint); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; }
 
 .cm-editor { background: var(--bg); color: var(--fg); font-size: var(--fs); outline: none !important; }
