@@ -9,7 +9,7 @@
   --fg-faint: #4a5063;
   --accent: #7aa2f7;
   --sel: #2d3b5e;
-  --line-active: #1b1e26;
+  --line-active: rgb(192 202 245 / 0.045); /* translucent so the selection layer underneath still shows */
   --gutter: #3b4157;
   --gutter-active: #8890ad;
 
@@ -46,7 +46,7 @@
     --fg-faint: #a3a9bd;
     --accent: #3b6fd4;
     --sel: #cddcf8;
-    --line-active: #f1f3f8;
+    --line-active: rgb(52 59 88 / 0.05);
     --gutter: #b4b9ca;
     --gutter-active: #5a6180;
 
@@ -118,7 +118,7 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 .cm-editor .cm-gutters:hover .cm-foldGutter .cm-gutterElement { opacity: 1; }
 .cm-editor .cm-foldPlaceholder { background: var(--surface); border: 0; color: var(--fg-dim); border-radius: 4px; padding: 0 6px; }
 .cm-editor .cm-selectionBackground, .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-editor ::selection { background: var(--sel) !important; }
-.cm-editor .cm-selectionMatch { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.cm-editor .cm-selectionMatch { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .cm-editor .cm-matchingBracket { background: color-mix(in srgb, var(--accent) 28%, transparent); outline: 0; }
 .cm-editor .cm-scroller { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--fg) 22%, transparent) transparent; }
 .cm-editor .cm-searchMatch { background: color-mix(in srgb, var(--syn-meta) 30%, transparent); outline: 0; }
