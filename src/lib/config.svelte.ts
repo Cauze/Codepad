@@ -18,6 +18,8 @@ export interface Settings {
   fontSize: number;
   /** e.g. "JetBrains Mono"; empty = built-in stack */
   fontFamily: string;
+  /** multiplier of the font size, 1-3 */
+  lineHeight: number;
   wordWrap: boolean;
   lineNumbers: boolean;
 }
@@ -39,6 +41,7 @@ export const DEFAULTS: Readonly<Settings> = Object.freeze({
   startup: 'restore',
   fontSize: 13.5,
   fontFamily: '',
+  lineHeight: 1.6,
   wordWrap: false,
   lineNumbers: true,
 });
@@ -60,6 +63,7 @@ function sanitize(raw: unknown): Settings {
     startup: o.startup === 'restore' || o.startup === 'empty' ? o.startup : DEFAULTS.startup,
     fontSize: num(o.fontSize, 9, 28, DEFAULTS.fontSize),
     fontFamily: typeof o.fontFamily === 'string' ? o.fontFamily.trim() : DEFAULTS.fontFamily,
+    lineHeight: num(o.lineHeight, 1, 3, DEFAULTS.lineHeight),
     wordWrap: typeof o.wordWrap === 'boolean' ? o.wordWrap : DEFAULTS.wordWrap,
     lineNumbers: typeof o.lineNumbers === 'boolean' ? o.lineNumbers : DEFAULTS.lineNumbers,
   };

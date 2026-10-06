@@ -34,6 +34,7 @@
     const root = document.documentElement;
     root.dataset.theme = settings.theme === 'system' ? (osLight ? 'light' : 'dark') : settings.theme;
     root.style.setProperty('--fs', settings.fontSize + 'px');
+    root.style.setProperty('--lh', String(settings.lineHeight));
     const ff = settings.fontFamily;
     if (ff) root.style.setProperty('--mono', `${/[,"']/.test(ff) ? ff : `"${ff}"`}, ${DEFAULT_MONO}`);
     else root.style.removeProperty('--mono');
