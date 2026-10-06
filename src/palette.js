@@ -1,42 +1,63 @@
 const $ = (id) => document.getElementById(id);
 
-/** Subsequence match: every query char must appear in order. Returns matched indices + a score. */
+/**
+ * Subsequence match: every query char must appear in order. Returns the best-scoring alignment
+ * (matched indices + score), found by DP so "tline" lands on the word "Line", not the l in "Toggle".
+ * Scoring: +1 per char, +3 when it follows the previous match directly, +2 at the start of a word,
+ * and a small penalty for starting late.
+ */
 function fuzzy(query, text) {
   const q = query.toLowerCase().replace(/\s+/g, '');
   if (!q) return { score: 0, idx: [] };
   const s = text.toLowerCase();
-  const idx = [];
-  let score = 0, last = -2, from = 0;
-  for (const ch of q) {
-    const i = s.indexOf(ch, from);
-    if (i < 0) return null;
-    idx.push(i);
-    score += 1;
-    if (i === last + 1) score += 3;                 // consecutive run
-    if (i === 0 || s[i - 1] === ' ') score += 2;    // start of a word
-    last = i;
-    from = i + 1;
+  const n = s.length;
+  let prev = [];
+  const back = [];
+  for (let i = 0; i < q.length; i++) {
+    const cur = new Array(n).fill(-Infinity);
+    const from = new Array(n).fill(-1);
+    for (let j = 0; j < n; j++) {
+      if (s[j] !== q[i]) continue;
+      const here = 1 + (j === 0 || s[j - 1] === ' ' ? 2 : 0);
+      if (i === 0) { cur[j] = here - j * 0.1; continue; }
+      for (let k = 0; k < j; k++) {
+        if (prev[k] === -Infinity) continue;
+        const sc = prev[k] + here + (k === j - 1 ? 3 : 0);
+        if (sc > cur[j]) { cur[j] = sc; from[j] = k; }
+      }
+    }
+    back.push(from);
+    prev = cur;
   }
-  return { score: score - idx[0] * 0.1, idx };
+  let end = -1, best = -Infinity;
+  prev.forEach((v, j) => { if (v > best) { best = v; end = j; } });
+  if (end < 0) return null;
+  const idx = [];
+  for (let i = q.length - 1, j = end; i >= 0; i--) { idx.unshift(j); j = back[i][j]; }
+  return { score: best, idx };
 }
 
 /**
- * getCommands() -> [{ title, keys?, run }] for the commands currently available.
- * onClose() is called whenever the palette closes (used to give focus back to the editor).
+ * One overlay, three uses:
+ *   open()  - the command list; getCommands() -> [{ title, keys?, run }]
+ *   pick()  - choose from a list of { title, detail?, value }; resolves the value or null
+ *   ask()   - free-text prompt; `parse(text)` returns a value or null (Enter is ignored while null)
+ * onClose() runs whenever the overlay closes (used to give focus back to the editor).
  */
 export function createPalette(getCommands, onClose) {
   const root = $('palette');
   const input = $('pal-input');
   const list = $('pal-list');
+  let cfg = null;   // the session currently shown
   let items = [];
   let sel = 0;
 
-  function draw() {
+  function draw(hint) {
     list.textContent = '';
-    if (!items.length) {
+    if (hint != null || !items.length) {
       const li = document.createElement('li');
       li.className = 'none';
-      li.textContent = 'No matching commands';
+      li.textContent = hint ?? 'No matches';
       list.append(li);
       return;
     }
@@ -51,6 +72,12 @@ export function createPalette(getCommands, onClose) {
         else title.append(ch);
       });
       li.append(title);
+      if (it.c.detail) {
+        const d = document.createElement('span');
+        d.className = 'pd';
+        d.textContent = it.c.detail;
+        li.append(d);
+      }
       if (it.c.keys) {
         const k = document.createElement('span');
         k.className = 'pk';
@@ -62,9 +89,10 @@ export function createPalette(getCommands, onClose) {
         li.append(k);
       }
       li.addEventListener('mousemove', () => { if (sel !== n) { sel = n; mark(); } });
-      li.addEventListener('mousedown', (e) => { e.preventDefault(); run(n); });
+      li.addEventListener('mousedown', (e) => { e.preventDefault(); choose(n); });
       list.append(li);
     });
+    list.children[sel]?.scrollIntoView({ block: 'nearest' });
   }
 
   function mark() {
@@ -72,44 +100,80 @@ export function createPalette(getCommands, onClose) {
     list.children[sel]?.scrollIntoView({ block: 'nearest' });
   }
 
-  function refresh() {
+  function refresh(first = false) {
     const q = input.value;
-    items = getCommands()
+    if (cfg.parse) { // prompt mode: no list, just a live hint
+      items = [];
+      draw(cfg.hint(q, q.trim() ? cfg.parse(q) : null));
+      return;
+    }
+    items = cfg.items()
       .map((c) => ({ c, m: fuzzy(q, c.title) }))
       .filter((x) => x.m)
       .sort((a, b) => b.m.score - a.m.score);
-    sel = 0;
+    sel = first && !q && cfg.selected != null ? cfg.selected : 0;
     draw();
   }
 
-  function run(n) {
-    const it = items[n];
-    if (!it) return;
-    close();
-    it.c.run();
-  }
-
-  function open() {
+  function begin(next) {
+    cfg?.cancel?.(); // a new session replaces any still open
+    cfg = next;
     root.hidden = false;
     input.value = '';
-    refresh();
+    input.placeholder = next.placeholder;
+    refresh(true);
     input.focus();
   }
 
-  function close() {
+  /** Hide the overlay; `chosen` says whether the session ended with a selection. */
+  function end(chosen) {
     if (root.hidden) return;
+    const c = cfg;
+    cfg = null;
     root.hidden = true;
+    if (!chosen) c?.cancel?.();
     onClose();
   }
 
-  input.addEventListener('input', refresh);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); close(); }
-    else if (e.key === 'Enter') { e.preventDefault(); run(sel); }
-    else if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) { e.preventDefault(); if (items.length) { sel = (sel + 1) % items.length; mark(); } }
-    else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) { e.preventDefault(); if (items.length) { sel = (sel - 1 + items.length) % items.length; mark(); } }
-  });
-  root.addEventListener('mousedown', (e) => { if (e.target === root) close(); });
+  function choose(n) {
+    const it = items[n];
+    if (!it) return;
+    const c = cfg;
+    end(true);
+    c.choose(it.c);
+  }
 
-  return { open, close, isOpen: () => !root.hidden, toggle: () => (root.hidden ? open() : close()) };
+  function accept() {
+    if (!cfg.parse) { choose(sel); return; }
+    const value = cfg.parse(input.value);
+    if (value == null) return;
+    const c = cfg;
+    end(true);
+    c.choose(value);
+  }
+
+  input.addEventListener('input', () => refresh());
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); end(false); }
+    else if (e.key === 'Enter') { e.preventDefault(); accept(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); if (items.length) { sel = (sel + 1) % items.length; mark(); } }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (items.length) { sel = (sel - 1 + items.length) % items.length; mark(); } }
+  });
+  root.addEventListener('mousedown', (e) => { if (e.target === root) end(false); });
+
+  const open = () => begin({ placeholder: 'Type a command…', items: getCommands, choose: (c) => c.run() });
+
+  return {
+    open,
+    close: () => end(false),
+    isOpen: () => !root.hidden,
+    toggle: () => (root.hidden ? open() : end(false)),
+    pick: ({ placeholder, items: list_, selected }) =>
+      new Promise((resolve) => begin({
+        placeholder, items: () => list_, selected,
+        choose: (it) => resolve(it.value), cancel: () => resolve(null),
+      })),
+    ask: ({ placeholder, parse, hint }) =>
+      new Promise((resolve) => begin({ placeholder, parse, hint, choose: resolve, cancel: () => resolve(null) })),
+  };
 }

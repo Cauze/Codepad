@@ -4,7 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, keymap } from '@codemirror/view';
 import { syntaxHighlighting, HighlightStyle, LanguageDescription, foldGutter, foldKeymap, bracketMatching } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
@@ -12,6 +12,7 @@ import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/sea
 import { defaultKeymap } from '@codemirror/commands';
 import { tags as t } from '@lezer/highlight';
 import { createPalette } from './palette.js';
+import { settings, state as appState, settingsPath, DEFAULTS, loadConfig, saveSettings, saveState, pollSettings } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const win = getCurrentWindow();
@@ -39,11 +40,6 @@ const highlight = HighlightStyle.define([
 const tabs = []; // { path, name, state, scroll, mtime, missing, lang }
 let active = null;
 
-const store = {
-  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
-};
-
 const baseName = (p) => p.split(/[\\/]/).pop();
 const dirName = (p) => p.split(/[\\/]/).slice(-2, -1)[0] ?? '';
 
@@ -56,35 +52,82 @@ async function languageFor(name) {
   try { return { support: await desc.load(), label: desc.name }; } catch { return { support: [], label: 'Plain Text' }; }
 }
 
+// Settings-driven pieces live in compartments so they can be swapped without rebuilding each tab.
+const wrapComp = new Compartment();
+const numbersComp = new Compartment();
+const wrapExt = () => (settings.wordWrap ? EditorView.lineWrapping : []);
+const numbersExt = () => (settings.lineNumbers ? [lineNumbers(), highlightActiveLineGutter()] : []);
+
+// Ctrl+G is "Go to Line" here, so drop the search panel's find-next on it (F3 still works).
+const findKeys = searchKeymap.filter((k) => k.key !== 'Mod-g' && k.key !== 'Shift-Mod-g');
+
 function makeState(doc, lang) {
   return EditorState.create({
     doc,
     extensions: [
       EditorState.readOnly.of(true),
-      lineNumbers(),
+      numbersComp.of(numbersExt()),
+      wrapComp.of(wrapExt()),
       foldGutter({ openText: '⌄', closedText: '›' }),
       highlightActiveLine(),
-      highlightActiveLineGutter(),
       drawSelection(),
       bracketMatching(),
       highlightSelectionMatches(),
       search({ top: true }),
       syntaxHighlighting(highlight),
-      keymap.of([...searchKeymap, ...foldKeymap, ...defaultKeymap]),
+      keymap.of([...findKeys, ...foldKeymap, ...defaultKeymap]),
       lang.support,
       EditorView.updateListener.of((u) => { if (u.selectionSet || u.docChanged) updateStatus(u.state); }),
     ],
   });
 }
 
-function updateStatus(state = view.state) {
+function updateStatus(st = view.state) {
   if (!active) { $('st-pos').textContent = $('st-lines').textContent = $('st-lang').textContent = ''; return; }
-  const head = state.selection.main.head;
-  const line = state.doc.lineAt(head);
+  const head = st.selection.main.head;
+  const line = st.doc.lineAt(head);
   $('st-pos').textContent = `Ln ${line.number}, Col ${head - line.from + 1}`;
-  $('st-lines').textContent = `${state.doc.lines.toLocaleString()} lines`;
+  $('st-lines').textContent = `${st.doc.lines.toLocaleString()} lines`;
   $('st-lang').textContent = active.lang;
 }
+
+/* ---------- appearance + settings ---------- */
+const systemLight = matchMedia('(prefers-color-scheme: light)');
+const DEFAULT_MONO = "'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace";
+
+function applyAppearance() {
+  const root = document.documentElement;
+  root.dataset.theme = settings.theme === 'system' ? (systemLight.matches ? 'light' : 'dark') : settings.theme;
+  root.style.setProperty('--fs', settings.fontSize + 'px');
+  const ff = settings.fontFamily;
+  if (ff) root.style.setProperty('--mono', `${/[,"']/.test(ff) ? ff : `"${ff}"`}, ${DEFAULT_MONO}`);
+  else root.style.removeProperty('--mono');
+  view.requestMeasure();
+}
+systemLight.addEventListener('change', () => { if (settings.theme === 'system') applyAppearance(); });
+
+/** Push wrap / line-number settings into every open tab (the active one lives in the view). */
+function applyEditorSettings() {
+  const effects = [wrapComp.reconfigure(wrapExt()), numbersComp.reconfigure(numbersExt())];
+  for (const tb of tabs) {
+    if (tb === active) view.dispatch({ effects });
+    else tb.state = tb.state.update({ effects }).state;
+  }
+}
+
+function applySettings() {
+  applyAppearance();
+  applyEditorSettings();
+}
+
+function changeSetting(key, value) {
+  if (settings[key] === value) return;
+  settings[key] = value;
+  saveSettings();
+  applySettings();
+}
+
+const setFontSize = (v) => changeSetting('fontSize', Math.min(28, Math.max(9, Math.round(v * 2) / 2)));
 
 /* ---------- tabs ---------- */
 function renderTabs() {
@@ -123,8 +166,12 @@ function renderTabs() {
   el.querySelector('.tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
+let restoring = true; // don't overwrite the saved session while it is still being reopened
+
 function persist() {
-  store.set('session', { paths: tabs.map((t) => t.path), active: active?.path ?? null });
+  if (restoring) return;
+  appState.session = { paths: tabs.map((t) => t.path), active: active?.path ?? null };
+  saveState();
 }
 
 function showEmpty() {
@@ -165,9 +212,59 @@ function closeAll() {
   activate(null);
 }
 
+/** Close every tab except `keep` (which must include the active tab, so focus doesn't move). */
+function closeAllExcept(keep) {
+  tabs.splice(0, tabs.length, ...tabs.filter((t) => keep.includes(t)));
+  renderTabs();
+  persist();
+}
+
 function cycle(dir) {
   if (tabs.length < 2) return;
   activate(tabs[(tabs.indexOf(active) + dir + tabs.length) % tabs.length]);
+}
+
+async function switchTab() {
+  const picked = await palette.pick({
+    placeholder: 'Switch to file…',
+    items: tabs.map((t) => ({ title: t.name, detail: t.path, value: t })),
+    selected: tabs.indexOf(active),
+  });
+  if (picked) activate(picked);
+}
+
+/** Accepts "42" or "42:7" (line:column). */
+const parseLine = (text) => {
+  const m = /^\s*(\d+)(?:\s*[:,]\s*(\d+))?\s*$/.exec(text);
+  return m ? { line: +m[1], col: m[2] ? +m[2] : 1 } : null;
+};
+
+async function gotoLine() {
+  const total = view.state.doc.lines;
+  const target = await palette.ask({
+    placeholder: `Go to line (1–${total.toLocaleString()}), or line:column`,
+    parse: parseLine,
+    hint: (text, p) => (p ? `Go to line ${Math.min(Math.max(p.line, 1), total)}${p.col > 1 ? `, column ${p.col}` : ''}` : text.trim() ? 'Enter a line number, e.g. 120 or 120:8' : `File has ${total.toLocaleString()} lines`),
+  });
+  if (!target) return;
+  const line = view.state.doc.line(Math.min(Math.max(target.line, 1), total));
+  const pos = line.from + Math.min(target.col - 1, line.length);
+  view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
+  view.focus();
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;user-select:text';
+    document.body.append(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
 }
 
 /* ---------- files ---------- */
@@ -192,8 +289,8 @@ async function openPath(rawPath) {
 
   const job = (async () => {
     try {
-      const { data, name, state, langLabel } = await readInto(path);
-      const tb = { path: data.path, name, state, scroll: 0, mtime: data.mtime, missing: false, lang: langLabel };
+      const { data, name, state: st, langLabel } = await readInto(path);
+      const tb = { path: data.path, name, state: st, scroll: 0, mtime: data.mtime, missing: false, lang: langLabel };
       tabs.push(tb);
       pushRecent(data.path);
       activate(tb);
@@ -226,33 +323,42 @@ async function checkChanged(list) {
     if (tb.missing) { tb.missing = false; renderTabs(); }
     if (m === tb.mtime) continue;
     try {
-      const { data, state, langLabel } = await readInto(tb.path);
+      const { data, state: st, langLabel } = await readInto(tb.path);
       tb.mtime = data.mtime;
       tb.lang = langLabel;
       if (tb === active) {
         const scroll = view.scrollDOM.scrollTop;
-        tb.state = state;
-        view.setState(state);
+        tb.state = st;
+        view.setState(st);
         view.scrollDOM.scrollTop = scroll;
         updateStatus();
       } else {
-        tb.state = state;
+        tb.state = st;
       }
     } catch { /* file mid-write; try again next tick */ }
   }
 }
-setInterval(() => { if (active && !document.hidden) checkChanged([active]); }, 1500);
-window.addEventListener('focus', () => checkChanged(tabs));
+
+async function checkSettings() {
+  if (await pollSettings()) applySettings();
+}
+
+setInterval(() => {
+  if (document.hidden) return;
+  if (active) checkChanged([active]);
+  checkSettings();
+}, 1500);
+window.addEventListener('focus', () => { checkChanged(tabs); checkSettings(); });
 
 /* ---------- recents ---------- */
 function pushRecent(path) {
-  const r = [path, ...store.get('recent', []).filter((p) => p !== path)].slice(0, 8);
-  store.set('recent', r);
+  appState.recent = [path, ...appState.recent.filter((p) => p !== path)].slice(0, 8);
+  saveState();
 }
 function renderRecent() {
   const ul = $('recent');
   ul.textContent = '';
-  for (const p of store.get('recent', [])) {
+  for (const p of appState.recent) {
     const li = document.createElement('li');
     const n = document.createElement('span');
     n.textContent = baseName(p);
@@ -265,21 +371,40 @@ function renderRecent() {
   }
 }
 
-/* ---------- zoom ---------- */
-let fs = store.get('fs', 13.5);
-function setFs(v) {
-  fs = Math.min(28, Math.max(9, v));
-  document.documentElement.style.setProperty('--fs', fs + 'px');
-  store.set('fs', fs);
-  view.requestMeasure();
-}
-setFs(fs);
-
 /* ---------- command palette ---------- */
+const hasTab = () => !!active;
+const manyTabs = () => tabs.length > 1;
+const theme = (name, label) => ({
+  title: `Theme: ${label}`,
+  when: () => settings.theme !== name,
+  run: () => changeSetting('theme', name),
+});
+
 const commands = [
   { title: 'Open File…', keys: 'Ctrl+O', run: pickFiles },
-  { title: 'Close Current File', keys: 'Ctrl+W', when: () => !!active, run: () => closeTab(active) },
+  { title: 'Switch Tab…', keys: 'Ctrl+P', when: hasTab, run: switchTab },
+  { title: 'Go to Line…', keys: 'Ctrl+G', when: hasTab, run: gotoLine },
+  { title: 'Next Tab', keys: 'Ctrl+Tab', when: manyTabs, run: () => cycle(1) },
+  { title: 'Previous Tab', keys: 'Ctrl+Shift+Tab', when: manyTabs, run: () => cycle(-1) },
+
+  { title: 'Close Current File', keys: 'Ctrl+W', when: hasTab, run: () => closeTab(active) },
+  { title: 'Close Other Tabs', when: manyTabs, run: () => closeAllExcept([active]) },
+  { title: 'Close Tabs to the Right', when: () => hasTab() && tabs.indexOf(active) < tabs.length - 1, run: () => closeAllExcept(tabs.slice(0, tabs.indexOf(active) + 1)) },
   { title: 'Close All Files', when: () => tabs.length > 0, run: closeAll },
+
+  { title: 'Copy File Path', when: hasTab, run: () => copyText(active.path) },
+  { title: 'Reveal in Explorer', when: hasTab, run: () => invoke('reveal_in_explorer', { path: active.path }).catch(console.error) },
+
+  { title: 'Zoom In', keys: 'Ctrl+=', run: () => setFontSize(settings.fontSize + 1) },
+  { title: 'Zoom Out', keys: 'Ctrl+-', run: () => setFontSize(settings.fontSize - 1) },
+  { title: 'Reset Zoom', keys: 'Ctrl+0', when: () => settings.fontSize !== DEFAULTS.fontSize, run: () => setFontSize(DEFAULTS.fontSize) },
+  { title: 'Toggle Word Wrap', keys: 'Alt+Z', run: () => changeSetting('wordWrap', !settings.wordWrap) },
+  { title: 'Toggle Line Numbers', run: () => changeSetting('lineNumbers', !settings.lineNumbers) },
+  theme('system', 'System'),
+  theme('dark', 'Dark'),
+  theme('light', 'Light'),
+
+  { title: 'Open Settings File', run: () => openPath(settingsPath) },
   { title: 'Close Codepad', keys: 'Ctrl+Q', run: () => win.close() },
 ];
 
@@ -295,19 +420,24 @@ window.addEventListener('keydown', (e) => {
     palette.toggle();
     return;
   }
+  if (e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); changeSetting('wordWrap', !settings.wordWrap); return; }
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key;
   if (k === 'o') { e.preventDefault(); palette.close(); pickFiles(); }
   else if (k === 'w') { e.preventDefault(); palette.close(); if (active) closeTab(active); }
   else if (k === 'q') { e.preventDefault(); win.close(); }
+  else if (k === 'p' && !e.shiftKey) { e.preventDefault(); if (active) switchTab(); }
+  else if (k === 'g') { e.preventDefault(); if (active) gotoLine(); }
   else if (k === 'Tab') { e.preventDefault(); cycle(e.shiftKey ? -1 : 1); }
+  else if (k === 'PageDown') { e.preventDefault(); cycle(1); }
+  else if (k === 'PageUp') { e.preventDefault(); cycle(-1); }
   else if (k >= '1' && k <= '9') { e.preventDefault(); const tb = k === '9' ? tabs[tabs.length - 1] : tabs[+k - 1]; if (tb) activate(tb); }
-  else if (k === '=' || k === '+') { e.preventDefault(); setFs(fs + 1); }
-  else if (k === '-') { e.preventDefault(); setFs(fs - 1); }
-  else if (k === '0') { e.preventDefault(); setFs(13.5); }
+  else if (k === '=' || k === '+') { e.preventDefault(); setFontSize(settings.fontSize + 1); }
+  else if (k === '-') { e.preventDefault(); setFontSize(settings.fontSize - 1); }
+  else if (k === '0') { e.preventDefault(); setFontSize(DEFAULTS.fontSize); }
 });
 window.addEventListener('wheel', (e) => {
-  if (e.ctrlKey) { e.preventDefault(); setFs(fs + (e.deltaY < 0 ? 1 : -1)); }
+  if (e.ctrlKey) { e.preventDefault(); setFontSize(settings.fontSize + (e.deltaY < 0 ? 1 : -1)); }
 }, { passive: false });
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -323,15 +453,19 @@ listen('open-files', (e) => openPaths(e.payload));
 
 /* ---------- boot ---------- */
 (async () => {
+  await loadConfig();
+  applyAppearance();
   showEmpty();
   const fromArgs = await invoke('initial_files');
   if (fromArgs.length) {
     await openPaths(fromArgs);
   } else {
-    const s = store.get('session', { paths: [], active: null });
+    const s = { ...appState.session };
     for (const p of s.paths) { try { await openPath(p); } catch {} }
     const a = tabs.find((t) => t.path === s.active);
     if (a) activate(a);
   }
+  restoring = false;
+  persist();
   win.show();
 })();

@@ -68,6 +68,74 @@ fn file_mtime(path: String) -> Result<u64, String> {
     mtime_ms(Path::new(&path))
 }
 
+/// Only these files may be read/written through the config commands.
+const CONFIG_FILES: [&str; 3] = ["settings.json", "state.json", "settings.invalid.json"];
+
+#[derive(Serialize)]
+struct ConfigFile {
+    path: String,
+    /// `None` when the file doesn't exist yet.
+    content: Option<String>,
+    mtime: u64,
+}
+
+fn config_path(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathBuf, String> {
+    if !CONFIG_FILES.contains(&name) {
+        return Err(format!("unknown config file: {name}"));
+    }
+    let dir = app.path().config_dir().map_err(|e| e.to_string())?.join("Codepad");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join(name))
+}
+
+#[tauri::command]
+fn read_config(app: tauri::AppHandle, name: String) -> Result<ConfigFile, String> {
+    let p = config_path(&app, &name)?;
+    Ok(ConfigFile {
+        content: fs::read_to_string(&p).ok(),
+        mtime: mtime_ms(&p).unwrap_or(0),
+        path: p.to_string_lossy().into_owned(),
+    })
+}
+
+/// Writes via a temp file + rename so a crash can't leave a half-written config.
+#[tauri::command]
+fn write_config(app: tauri::AppHandle, name: String, content: String) -> Result<u64, String> {
+    let p = config_path(&app, &name)?;
+    let tmp = p.with_extension("json.tmp");
+    fs::write(&tmp, content).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &p).map_err(|e| e.to_string())?;
+    mtime_ms(&p)
+}
+
+#[tauri::command]
+fn reveal_in_explorer(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if !p.exists() {
+        return Err("file not found".into());
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("explorer")
+            .raw_arg(format!("/select,\"{path}\""))
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg("-R").arg(p).spawn().map_err(|e| e.to_string())?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(p.parent().unwrap_or(p))
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// File arguments (skipping argv[0]); relative paths resolve against `cwd`,
 /// which for a second launch is that process's directory, not ours.
 fn file_args<I: IntoIterator<Item = String>>(args: I, cwd: Option<&str>) -> Vec<String> {
@@ -99,7 +167,12 @@ pub fn run() {
             let _ = app.emit("open-files", file_args(args, Some(&cwd)));
         }))
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![read_file, file_mtime, initial_files, canonical_path])
+        .invoke_handler(tauri::generate_handler![read_file, file_mtime, initial_files,
+            canonical_path,
+            read_config,
+            write_config,
+            reveal_in_explorer
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Codepad");
 }
