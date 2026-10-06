@@ -7,6 +7,7 @@
   import Palette from './Palette.svelte';
   import StatusBar from './StatusBar.svelte';
   import TitleBar from './TitleBar.svelte';
+  import UpdateNotice from './UpdateNotice.svelte';
 
   const DEFAULT_MONO = "'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace";
 
@@ -74,3 +75,4 @@
 
 <StatusBar />
 <Palette />
+<UpdateNotice />

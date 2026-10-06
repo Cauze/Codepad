@@ -14,6 +14,8 @@ export interface Settings {
   theme: Theme;
   /** "restore" reopens the tabs from last time; "empty" starts with none. */
   startup: Startup;
+  /** Look for a newer release shortly after launch (it only ever shows a notice). */
+  checkForUpdates: boolean;
   /** px, 9-28 */
   fontSize: number;
   /** e.g. "JetBrains Mono"; empty = built-in stack */
@@ -27,6 +29,8 @@ export interface Settings {
 export interface AppState {
   session: { paths: string[]; active: string | null };
   recent: string[];
+  /** Version whose update notice was dismissed, so it isn't shown again at every launch. */
+  dismissedUpdate: string | null;
 }
 
 interface ConfigFile {
@@ -39,6 +43,7 @@ interface ConfigFile {
 export const DEFAULTS: Readonly<Settings> = Object.freeze({
   theme: 'system',
   startup: 'restore',
+  checkForUpdates: true,
   fontSize: 13.5,
   fontFamily: '',
   lineHeight: 1.6,
@@ -48,7 +53,7 @@ export const DEFAULTS: Readonly<Settings> = Object.freeze({
 
 /** Reactive: components and effects that read these re-run when they change. */
 export const settings: Settings = $state({ ...DEFAULTS });
-export const appState: AppState = $state({ session: { paths: [], active: null }, recent: [] });
+export const appState: AppState = $state({ session: { paths: [], active: null }, recent: [], dismissedUpdate: null });
 export const meta = { settingsPath: '' };
 
 let settingsMtime = 0;
@@ -61,6 +66,7 @@ function sanitize(raw: unknown): Settings {
   return {
     theme: o.theme === 'system' || o.theme === 'dark' || o.theme === 'light' ? o.theme : DEFAULTS.theme,
     startup: o.startup === 'restore' || o.startup === 'empty' ? o.startup : DEFAULTS.startup,
+    checkForUpdates: typeof o.checkForUpdates === 'boolean' ? o.checkForUpdates : DEFAULTS.checkForUpdates,
     fontSize: num(o.fontSize, 9, 28, DEFAULTS.fontSize),
     fontFamily: typeof o.fontFamily === 'string' ? o.fontFamily.trim() : DEFAULTS.fontFamily,
     lineHeight: num(o.lineHeight, 1, 3, DEFAULTS.lineHeight),
@@ -95,6 +101,7 @@ export async function loadConfig(): Promise<void> {
     const j = (st.content ? JSON.parse(st.content) : {}) as Partial<AppState>;
     const strings = (a: unknown): string[] => (Array.isArray(a) ? a.filter((p): p is string => typeof p === 'string') : []);
     appState.recent = strings(j.recent).slice(0, 8);
+    appState.dismissedUpdate = typeof j.dismissedUpdate === 'string' ? j.dismissedUpdate : null;
     appState.session = {
       paths: strings(j.session?.paths),
       active: typeof j.session?.active === 'string' ? j.session.active : null,

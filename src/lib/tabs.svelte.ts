@@ -6,6 +6,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import type { EditorState } from '@codemirror/state';
 import * as editor from './editor';
 import { appState, loadConfig, pollSettings, saveState, settings } from './config.svelte';
+import { initUpdates } from './update.svelte';
 
 interface FileData {
   path: string;
@@ -212,4 +213,5 @@ export async function boot(): Promise<void> {
   });
   void listen<string[]>('open-files', (e) => openPaths(e.payload));
   await win.show();
+  void initUpdates();
 }

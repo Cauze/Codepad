@@ -3,6 +3,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { DEFAULTS, changeSetting, meta, setFontSize, settings, type Startup, type Theme } from './config.svelte';
 import * as editor from './editor';
 import { ask, closePalette, openList, pal, pick, type Item } from './palette.svelte';
+import { checkForUpdates, installUpdate, upd } from './update.svelte';
 import { activate, closeAll, closeAllExcept, closeTab, cycle, openPath, pickFiles, store } from './tabs.svelte';
 
 export interface Command extends Item {
@@ -106,6 +107,13 @@ export const commands: Command[] = [
 
   startup('restore', 'Reopen Last Files'),
   startup('empty', 'Start Empty'),
+
+  { title: 'Check for Updates', when: () => upd.phase !== 'checking' && upd.phase !== 'downloading' && upd.phase !== 'restarting', run: () => void checkForUpdates(true) },
+  {
+    get title() { return `Install Update${upd.info ? ` (${upd.info.version})` : ''}`; },
+    when: () => (upd.phase === 'available' || upd.phase === 'error') && !!upd.info,
+    run: () => void installUpdate(),
+  },
 
   { title: 'Open Settings File', run: () => void openPath(meta.settingsPath) },
   { title: 'Close Codepad', keys: 'Ctrl+Q', run: () => void getCurrentWindow().close() },

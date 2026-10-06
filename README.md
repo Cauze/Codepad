@@ -20,6 +20,7 @@ It's inspired by [Markpad](https://github.com/sftwrdotdev/Markpad), which does t
 - **Command palette** (`F1` or `Ctrl+Shift+P`) with fuzzy search for everything: open and close files, switch tabs, go to line, zoom, theme, and more.
 - **Find** (`Ctrl+F`) with a VS Code-style floating widget: match case, whole word, regex, match count.
 - **Dark and light themes**, or follow the system setting.
+- **Updates itself on request.** A quiet notice tells you when a new release is out; nothing downloads or installs until you say so.
 - **Remembers your tabs** between launches, or starts empty if you'd rather.
 - **One window.** Opening a file from Explorer while Codepad is running adds a tab to the existing window, and the same file is never opened twice.
 
@@ -52,6 +53,17 @@ Open files with `Ctrl+O`, drag them onto the window, or run `Codepad.exe path\to
 | `Alt+Z` | Toggle word wrap |
 | `Ctrl+Q` | Quit |
 
+## Updates
+
+Codepad checks GitHub Releases for a newer version a few seconds after launch (turn this off with `checkForUpdates`). If there is one, a small notice appears with **Update & restart** and **Release notes**. Dismissing it leaves a discreet `↑ 0.2.0 available` in the status bar. Nothing is ever downloaded or installed automatically.
+
+You can also run **Check for Updates** (and **Install Update**) from the command palette at any time.
+
+- **Installer build:** downloads the new `-setup.exe`, runs it, and Codepad restarts when it finishes.
+- **Portable build:** downloads the new exe and swaps it in place, then restarts.
+
+Every download is checked against the SHA-256 checksum GitHub publishes for the release file, and discarded if it doesn't match. There's no update server: Codepad only talks to `api.github.com` and `github.com`.
+
 ## Settings
 
 Settings live in `%APPDATA%\Codepad\settings.json`. Open it with **Open Settings File** in the command palette. Changes are picked up while Codepad is running.
@@ -60,6 +72,7 @@ Settings live in `%APPDATA%\Codepad\settings.json`. Open it with **Open Settings
 {
   "theme": "system",
   "startup": "restore",
+  "checkForUpdates": true,
   "fontSize": 13.5,
   "fontFamily": "",
   "lineHeight": 1.6,
@@ -72,6 +85,7 @@ Settings live in `%APPDATA%\Codepad\settings.json`. Open it with **Open Settings
 | --- | --- |
 | `theme` | `"system"`, `"dark"`, `"light"` |
 | `startup` | `"restore"` reopens the tabs from last time, `"empty"` starts with none |
+| `checkForUpdates` | `true` looks for a newer release a few seconds after launch and shows a notice if there is one. `false` only checks when you ask. |
 | `fontSize` | 9 to 28 |
 | `fontFamily` | Any installed font, e.g. `"JetBrains Mono"`. Empty uses the built-in monospace stack. |
 | `lineHeight` | 1 to 3, as a multiple of the font size |

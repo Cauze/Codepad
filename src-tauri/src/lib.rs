@@ -1,3 +1,5 @@
+mod update;
+
 use serde::Serialize;
 use std::{fs, path::Path, time::UNIX_EPOCH};
 use tauri::{Emitter, Manager};
@@ -167,11 +169,19 @@ pub fn run() {
             let _ = app.emit("open-files", file_args(args, Some(&cwd)));
         }))
         .plugin(tauri_plugin_dialog::init())
+        .manage(update::UpdateState::default())
+        .setup(|_| {
+            std::thread::spawn(update::cleanup);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![read_file, file_mtime, initial_files,
             canonical_path,
             read_config,
             write_config,
-            reveal_in_explorer
+            reveal_in_explorer,
+            update::check_update,
+            update::install_update,
+            update::open_release_page
         ])
         .run(tauri::generate_context!())
         .expect("error while running Codepad");
