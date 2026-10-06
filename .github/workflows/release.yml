@@ -1,0 +1,82 @@
+name: Release
+
+# Publish by pushing a version tag:
+#   git tag v0.2.0 && git push origin v0.2.0
+# The tag must match the version in package.json, src-tauri/tauri.conf.json and src-tauri/Cargo.toml.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          const want = process.env.TAG.replace(/^v/, '');
+          const found = {
+            'package.json': JSON.parse(fs.readFileSync('package.json', 'utf8')).version,
+            'src-tauri/tauri.conf.json': JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8')).version,
+            'src-tauri/Cargo.toml': /^version\s*=\s*"([^"]+)"/m.exec(fs.readFileSync('src-tauri/Cargo.toml', 'utf8'))?.[1],
+          };
+          let bad = false;
+          for (const [file, v] of Object.entries(found)) {
+            if (v !== want) { console.error(`::error file=${file}::version is ${v}, but the tag is ${process.env.TAG}`); bad = true; }
+          }
+          if (bad) process.exit(1);
+          EOF
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # Portable first: --no-bundle leaves the plain exe untouched, whereas bundling
+      # stamps the installer type into it.
+      - name: Build portable exe
+        run: npx tauri build --no-bundle
+
+      - name: Stage portable exe
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir release
+          cp src-tauri/target/release/codepad.exe "release/Codepad_${TAG#v}_x64-portable.exe"
+
+      - name: Build installer
+        run: npx tauri build --bundles nsis
+
+      - name: Stage installer
+        shell: bash
+        run: cp src-tauri/target/release/bundle/nsis/*-setup.exe release/
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l release
+          flags=--generate-notes
+          # v1.2.3-beta.1 and the like are marked as pre-releases
+          [[ "$TAG" == *-* ]] && flags="$flags --prerelease"
+          gh release create "$TAG" release/* --title "Codepad ${TAG#v}" $flags
