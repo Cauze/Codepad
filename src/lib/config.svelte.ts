@@ -9,9 +9,17 @@ import { invoke } from '@tauri-apps/api/core';
 export type Theme = 'system' | 'dark' | 'light';
 /** What to do at launch (when no files are passed on the command line). */
 export type Startup = 'restore' | 'empty';
+/** When edited files are written back without asking. */
+export type AutoSave = 'off' | 'afterDelay' | 'onFocusChange';
 
 export interface Settings {
   theme: Theme;
+  /** Allow editing files. Off = Codepad is a pure viewer. */
+  editable: boolean;
+  /** "off": only on Ctrl+S; "afterDelay": shortly after you stop typing; "onFocusChange": when you switch tab or window. */
+  autoSave: AutoSave;
+  /** ms to wait after the last keystroke when autoSave is "afterDelay", 200-60000 */
+  autoSaveDelay: number;
   /** "restore" reopens the tabs from last time; "empty" starts with none. */
   startup: Startup;
   /** Look for a newer release shortly after launch (it only ever shows a notice). */
@@ -42,6 +50,9 @@ interface ConfigFile {
 
 export const DEFAULTS: Readonly<Settings> = Object.freeze({
   theme: 'system',
+  editable: false,
+  autoSave: 'off',
+  autoSaveDelay: 1000,
   startup: 'restore',
   checkForUpdates: true,
   fontSize: 13.5,
@@ -65,6 +76,9 @@ function sanitize(raw: unknown): Settings {
     typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
   return {
     theme: o.theme === 'system' || o.theme === 'dark' || o.theme === 'light' ? o.theme : DEFAULTS.theme,
+    editable: typeof o.editable === 'boolean' ? o.editable : DEFAULTS.editable,
+    autoSave: o.autoSave === 'off' || o.autoSave === 'afterDelay' || o.autoSave === 'onFocusChange' ? o.autoSave : DEFAULTS.autoSave,
+    autoSaveDelay: Math.round(num(o.autoSaveDelay, 200, 60000, DEFAULTS.autoSaveDelay)),
     startup: o.startup === 'restore' || o.startup === 'empty' ? o.startup : DEFAULTS.startup,
     checkForUpdates: typeof o.checkForUpdates === 'boolean' ? o.checkForUpdates : DEFAULTS.checkForUpdates,
     fontSize: num(o.fontSize, 9, 28, DEFAULTS.fontSize),

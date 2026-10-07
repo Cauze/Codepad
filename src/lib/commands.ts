@@ -1,10 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { DEFAULTS, changeSetting, meta, setFontSize, settings, type Startup, type Theme } from './config.svelte';
+import { DEFAULTS, changeSetting, meta, setFontSize, settings, type AutoSave, type Startup, type Theme } from './config.svelte';
 import * as editor from './editor';
 import { ask, closePalette, openList, pal, pick, type Item } from './palette.svelte';
 import { checkForUpdates, installUpdate, upd } from './update.svelte';
-import { activate, closeAll, closeAllExcept, closeTab, cycle, openPath, pickFiles, store } from './tabs.svelte';
+import { activate, closeAll, closeAllExcept, closeTab, cycle, openPath, pickFiles, revertTab, saveAll, saveTab, store } from './tabs.svelte';
 
 export interface Command extends Item {
   /** Hidden from the palette while this returns false. */
@@ -67,6 +67,12 @@ const theme = (name: Theme, label: string): Command => ({
   run: () => changeSetting('theme', name),
 });
 
+const autoSave = (name: AutoSave, label: string): Command => ({
+  title: `Auto Save: ${label}`,
+  when: () => settings.autoSave !== name,
+  run: () => changeSetting('autoSave', name),
+});
+
 const startup = (name: Startup, label: string): Command => ({
   title: `Startup: ${label}`,
   when: () => settings.startup !== name,
@@ -80,14 +86,18 @@ export const commands: Command[] = [
   { title: 'Next Tab', keys: 'Ctrl+Tab', when: manyTabs, run: () => cycle(1) },
   { title: 'Previous Tab', keys: 'Ctrl+Shift+Tab', when: manyTabs, run: () => cycle(-1) },
 
-  { title: 'Close Current File', keys: 'Ctrl+W', when: hasTab, run: () => store.active && closeTab(store.active) },
-  { title: 'Close Other Tabs', when: manyTabs, run: () => store.active && closeAllExcept([store.active]) },
+  { title: 'Save', keys: 'Ctrl+S', when: () => !!store.active?.dirty, run: () => store.active && void saveTab(store.active) },
+  { title: 'Save All', keys: 'Ctrl+Shift+S', when: () => store.tabs.some((t) => t.dirty), run: () => void saveAll() },
+  { title: 'Revert File', when: () => !!store.active && (store.active.dirty || store.active.stale), run: () => store.active && void revertTab(store.active) },
+
+  { title: 'Close Current File', keys: 'Ctrl+W', when: hasTab, run: () => store.active && void closeTab(store.active) },
+  { title: 'Close Other Tabs', when: manyTabs, run: () => store.active && void closeAllExcept([store.active]) },
   {
     title: 'Close Tabs to the Right',
     when: () => !!store.active && store.tabs.indexOf(store.active) < store.tabs.length - 1,
-    run: () => store.active && closeAllExcept(store.tabs.slice(0, store.tabs.indexOf(store.active) + 1)),
+    run: () => store.active && void closeAllExcept(store.tabs.slice(0, store.tabs.indexOf(store.active) + 1)),
   },
-  { title: 'Close All Files', when: () => store.tabs.length > 0, run: closeAll },
+  { title: 'Close All Files', when: () => store.tabs.length > 0, run: () => void closeAll() },
 
   { title: 'Copy File Path', when: hasTab, run: () => store.active && void copyText(store.active.path) },
   {
@@ -104,6 +114,12 @@ export const commands: Command[] = [
   theme('system', 'System'),
   theme('dark', 'Dark'),
   theme('light', 'Light'),
+
+  { title: 'Enable Editing', when: () => !settings.editable, run: () => changeSetting('editable', true) },
+  { title: 'Disable Editing', when: () => settings.editable, run: () => changeSetting('editable', false) },
+  autoSave('off', 'Off'),
+  autoSave('afterDelay', 'After Delay'),
+  autoSave('onFocusChange', 'On Focus Change'),
 
   startup('restore', 'Reopen Last Files'),
   startup('empty', 'Start Empty'),

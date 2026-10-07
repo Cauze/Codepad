@@ -83,6 +83,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); c
 .tab .x { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; border: 0; background: none; color: inherit; opacity: 0; flex: none; }
 .tab:hover .x, .tab.active .x { opacity: .7; }
 .tab .x:hover { background: color-mix(in srgb, var(--fg) 15%, transparent); opacity: 1; }
+.tab .x .dot { display: none; }
+.tab.dirty .x { opacity: .9; }
+.tab.dirty .x .cross { display: none; }
+.tab.dirty .x .dot { display: block; }
+.tab.dirty .x:hover .cross { display: block; }
+.tab.dirty .x:hover .dot { display: none; }
+.tab.stale .x .dot { color: var(--syn-meta); }
 
 #add { width: 34px; border: 0; background: none; color: var(--fg-dim); display: grid; place-items: center; flex: none; }
 #add:hover { color: var(--fg); background: var(--surface); }
@@ -161,6 +168,10 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 #status .grow { flex: 1; }
 
 /* ---------- update notice ---------- */
+#st-flash { color: var(--fg); }
+#st-flash.err { color: var(--syn-tag); }
+#st-ro { padding: 0 6px; height: 18px; border: 0; border-radius: 4px; background: none; color: var(--fg-faint); font: inherit; cursor: default; }
+#st-ro:hover { background: var(--surface); color: var(--fg-dim); }
 #st-update { padding: 0 6px; height: 18px; border: 0; border-radius: 4px; background: none; color: var(--accent); font: inherit; cursor: pointer; }
 #st-update:hover, #st-update:focus-visible { background: var(--surface); outline: none; }
 
@@ -177,3 +188,19 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 #toast .t-x:hover, #toast .t-x:focus-visible { background: var(--bg); color: var(--fg); outline: none; }
 #toast .bar { height: 4px; margin-top: 8px; border-radius: 2px; background: var(--border); overflow: hidden; }
 #toast .bar div { height: 100%; background: var(--accent); transition: width 0.1s linear; }
+
+/* ---------- modal dialog (save changes? etc.) ---------- */
+#dialog { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: center; align-items: flex-start; padding-top: 18vh; background: color-mix(in srgb, #000 45%, transparent); }
+#dialog[hidden] { display: none; }
+.dlg-box { width: min(440px, 92vw); padding: 18px 20px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 18px 50px rgba(0, 0, 0, .45); }
+.dlg-box h2 { margin: 0 0 6px; font: 600 14px var(--ui); color: var(--fg); overflow-wrap: anywhere; }
+.dlg-box p { margin: 0; color: var(--fg-dim); line-height: 1.5; overflow-wrap: anywhere; }
+.dlg-box ul { margin: 10px 0 0; padding: 6px 10px; max-height: 120px; overflow-y: auto; list-style: none; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--fg); font-size: 12.5px; }
+.dlg-box li { padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.dlg-actions button { padding: 5px 14px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--fg); font: inherit; cursor: pointer; }
+.dlg-actions button:hover, .dlg-actions button:focus-visible { border-color: var(--accent); outline: none; }
+.dlg-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+.dlg-actions button.danger { color: var(--syn-tag); }
+.dlg-actions button.danger:focus-visible, .dlg-actions button.danger:hover { border-color: var(--syn-tag); }
+.dlg-actions button.primary.danger { background: var(--syn-tag); border-color: var(--syn-tag); color: var(--bg); }

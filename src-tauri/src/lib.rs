@@ -13,6 +13,18 @@ struct FileData {
     content: Option<String>,
     /// Shown in place of the content when the file can't be displayed.
     note: Option<String>,
+    /// The file started with a UTF-8 byte-order mark (stripped from `content`; written back on save).
+    bom: bool,
+    /// Most line breaks are CRLF (the editor works in LF; this is how to write them back).
+    crlf: bool,
+    /// Not valid UTF-8, so `content` has replacement characters and must not be saved over the file.
+    lossy: bool,
+}
+
+impl FileData {
+    fn note(path: String, mtime: u64, note: String) -> Self {
+        FileData { path, mtime, content: None, note: Some(note), bom: false, crlf: false, lossy: false }
+    }
 }
 
 fn mtime_ms(p: &Path) -> Result<u64, String> {
@@ -48,21 +60,42 @@ fn read_file(path: String) -> Result<FileData, String> {
     let path = canon(p);
 
     if size > MAX_BYTES {
-        return Ok(FileData {
-            path,
-            mtime,
-            content: None,
-            note: Some(format!("File is too large to display ({} MB).", size / 1024 / 1024)),
-        });
+        return Ok(FileData::note(path, mtime, format!("File is too large to display ({} MB).", size / 1024 / 1024)));
     }
 
     let bytes = fs::read(p).map_err(|e| e.to_string())?;
     if bytes.iter().take(8192).any(|&b| b == 0) {
-        return Ok(FileData { path, mtime, content: None, note: Some("Binary file — not shown.".into()) });
+        return Ok(FileData::note(path, mtime, "Binary file — not shown.".into()));
     }
-    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&bytes);
-    let content = String::from_utf8_lossy(bytes).into_owned();
-    Ok(FileData { path, mtime, content: Some(content), note: None })
+    let bom = bytes.starts_with(&[0xEF, 0xBB, 0xBF]);
+    let body = if bom { &bytes[3..] } else { &bytes[..] };
+    let (content, lossy) = match std::str::from_utf8(body) {
+        Ok(s) => (s.to_owned(), false),
+        Err(_) => (String::from_utf8_lossy(body).into_owned(), true),
+    };
+    let crlf_n = content.matches("\r\n").count();
+    let lf_n = content.matches('\n').count() - crlf_n;
+    Ok(FileData { path, mtime, content: Some(content), note: None, bom, crlf: crlf_n > lf_n, lossy })
+}
+
+/// Saves `content` over `path` (recreating it if it was deleted). When `expected_mtime` is given and the
+/// file on disk has a different modification time, nothing is written and the error is `CONFLICT`, so
+/// the UI can ask before overwriting someone else's change. Returns the new mtime.
+#[tauri::command]
+fn write_file(path: String, content: String, bom: bool, expected_mtime: Option<u64>) -> Result<u64, String> {
+    let p = Path::new(&path);
+    if let (Some(want), Ok(now)) = (expected_mtime, mtime_ms(p)) {
+        if now != want {
+            return Err("CONFLICT".into());
+        }
+    }
+    let mut bytes = Vec::with_capacity(content.len() + 3);
+    if bom {
+        bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
+    }
+    bytes.extend_from_slice(content.as_bytes());
+    fs::write(p, bytes).map_err(|e| e.to_string())?;
+    mtime_ms(p)
 }
 
 #[tauri::command]
@@ -174,7 +207,7 @@ pub fn run() {
             std::thread::spawn(update::cleanup);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, file_mtime, initial_files,
+        .invoke_handler(tauri::generate_handler![read_file, write_file, file_mtime, initial_files,
             canonical_path,
             read_config,
             write_config,

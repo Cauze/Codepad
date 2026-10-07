@@ -21,7 +21,7 @@
 
   function onTabDown(e: MouseEvent, tb: Tab) {
     if ((e.target as Element).closest('.x')) return; // the close button handles its own click
-    if (e.button === 1) { e.preventDefault(); closeTab(tb); }
+    if (e.button === 1) { e.preventDefault(); void closeTab(tb); }
     else if (e.button === 0) activate(tb);
   }
 </script>
@@ -33,15 +33,19 @@
         class="tab"
         class:active={tb === store.active}
         class:missing={tb.missing}
-        title={tb.path}
+        class:dirty={tb.dirty}
+        class:stale={tb.stale}
+        title={tb.stale ? `${tb.path}
+Changed on disk since you opened it` : tb.path}
         role="tab"
         tabindex="-1"
         aria-selected={tb === store.active}
         onmousedown={(e) => onTabDown(e, tb)}
       >
         <span class="name">{tb.name}{#if duplicated.has(tb.name)}<span class="dir">{dirName(tb.path)}</span>{/if}</span>
-        <button class="x" aria-label="Close tab" onclick={(e) => { e.stopPropagation(); closeTab(tb); }}>
-          <svg width="8" height="8" viewBox="0 0 8 8"><path d="M0 0l8 8M8 0L0 8" stroke="currentColor" stroke-width="1.2" fill="none" /></svg>
+        <button class="x" aria-label={tb.dirty ? 'Close tab (unsaved changes)' : 'Close tab'} onclick={(e) => { e.stopPropagation(); void closeTab(tb); }}>
+          <svg class="cross" width="8" height="8" viewBox="0 0 8 8"><path d="M0 0l8 8M8 0L0 8" stroke="currentColor" stroke-width="1.2" fill="none" /></svg>
+          <svg class="dot" width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3.2" fill="currentColor" /></svg>
         </button>
       </div>
     {/each}

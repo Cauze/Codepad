@@ -1,9 +1,10 @@
-import { EditorState, Compartment, type Extension } from '@codemirror/state';
+import { EditorState, Compartment, type Extension, type Text } from '@codemirror/state';
 import { EditorView, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, keymap } from '@codemirror/view';
-import { syntaxHighlighting, HighlightStyle, LanguageDescription, foldGutter, foldKeymap, bracketMatching } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, LanguageDescription, foldGutter, foldKeymap, bracketMatching, indentOnInput, indentUnit } from '@codemirror/language';
+import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { languages } from '@codemirror/language-data';
 import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { defaultKeymap } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { tags as t } from '@lezer/highlight';
 import { settings } from './config.svelte';
 import { createFindPanel } from './findPanel';
@@ -56,13 +57,36 @@ const wrapComp = new Compartment();
 const numbersComp = new Compartment();
 const wrapExt = (): Extension => (settings.wordWrap ? EditorView.lineWrapping : []);
 const numbersExt = (): Extension => (settings.lineNumbers ? [lineNumbers(), highlightActiveLineGutter()] : []);
-const settingEffects = () => [wrapComp.reconfigure(wrapExt()), numbersComp.reconfigure(numbersExt())];
+/** Editing needs the setting on AND a file we can write back faithfully (not binary, too large, or non-UTF-8). */
+const editComp = new Compartment();
+const editExt = (fileEditable: boolean): Extension => EditorState.readOnly.of(!(settings.editable && fileEditable));
+const settingEffects = (fileEditable: boolean) => [
+  wrapComp.reconfigure(wrapExt()),
+  numbersComp.reconfigure(numbersExt()),
+  editComp.reconfigure(editExt(fileEditable)),
+];
+
+/** Indent unit of a file: a tab if tab-indented lines dominate, else the smallest space indent seen (2-8). */
+export function detectIndent(text: string): string {
+  let tabs = 0, spaces = 0, smallest = 0;
+  const lines = text.slice(0, 200_000).split('\n');
+  for (const l of lines.slice(0, 2000)) {
+    if (l[0] === '\t') tabs++;
+    else if (l[0] === ' ') {
+      const n = l.length - l.trimStart().length;
+      if (l.trim() && n > 0) { spaces++; if (!smallest || n < smallest) smallest = n; }
+    }
+  }
+  if (tabs > spaces) return '\t';
+  return ' '.repeat(Math.min(8, Math.max(2, smallest || 2)));
+}
 
 // Ctrl+G is "Go to Line" here, so drop the search panel's find-next on it (F3 still works).
 const findKeys = searchKeymap.filter((k) => k.key !== 'Mod-g' && k.key !== 'Shift-Mod-g');
 
 let view: EditorView | undefined;
 let onStatus: (s: Status) => void = () => {};
+let onEdit: (doc: Text) => void = () => {};
 
 export function statusOf(st: EditorState): Status {
   const head = st.selection.main.head;
@@ -70,11 +94,15 @@ export function statusOf(st: EditorState): Status {
   return { pos: `Ln ${line.number}, Col ${head - line.from + 1}`, lines: `${st.doc.lines.toLocaleString()} lines` };
 }
 
-export function makeState(doc: string, lang: Lang): EditorState {
+export function makeState(doc: string, lang: Lang, fileEditable: boolean): EditorState {
   return EditorState.create({
     doc,
     extensions: [
-      EditorState.readOnly.of(true),
+      editComp.of(editExt(fileEditable)),
+      indentUnit.of(detectIndent(doc)),
+      history(),
+      closeBrackets(),
+      indentOnInput(),
       numbersComp.of(numbersExt()),
       wrapComp.of(wrapExt()),
       foldGutter({ openText: '⌄', closedText: '›' }),
@@ -84,17 +112,19 @@ export function makeState(doc: string, lang: Lang): EditorState {
       highlightSelectionMatches(),
       search({ top: true, createPanel: createFindPanel }),
       syntaxHighlighting(highlight),
-      keymap.of([...findKeys, ...foldKeymap, ...defaultKeymap]),
+      keymap.of([...findKeys, ...foldKeymap, ...historyKeymap, ...closeBracketsKeymap, indentWithTab, ...defaultKeymap]),
       lang.support,
       EditorView.updateListener.of((u) => {
         if (u.selectionSet || u.docChanged) onStatus(statusOf(u.state));
+        if (u.docChanged) onEdit(u.state.doc);
       }),
     ],
   });
 }
 
-export function createEditor(parent: HTMLElement, statusCallback: (s: Status) => void): void {
+export function createEditor(parent: HTMLElement, statusCallback: (s: Status) => void, editCallback: (doc: Text) => void): void {
   onStatus = statusCallback;
+  onEdit = editCallback;
   view = new EditorView({ parent, state: EditorState.create({ doc: '' }) });
 }
 
@@ -102,6 +132,9 @@ function v(): EditorView {
   if (!view) throw new Error('editor not ready');
   return view;
 }
+
+/** The live state of the tab on screen. */
+export const currentState = (): EditorState => v().state;
 
 /** Snapshot of what's on screen, to save back into the tab being switched away from. */
 export function stash(): { state: EditorState; scroll: number } {
@@ -128,10 +161,11 @@ export function replaceState(state: EditorState): void {
 export const focus = (): void => view?.focus();
 export const requestMeasure = (): void => view?.requestMeasure();
 
-/** Re-apply wrap / line-number settings: to a stored state (inactive tab)... */
-export const reconfigure = (state: EditorState): EditorState => state.update({ effects: settingEffects() }).state;
+/** Re-apply wrap / line-number / editable settings: to a stored state (inactive tab)... */
+export const reconfigure = (state: EditorState, fileEditable: boolean): EditorState =>
+  state.update({ effects: settingEffects(fileEditable) }).state;
 /** ...or to the live view (active tab). */
-export const reconfigureActive = (): void => view?.dispatch({ effects: settingEffects() });
+export const reconfigureActive = (fileEditable: boolean): void => view?.dispatch({ effects: settingEffects(fileEditable) });
 
 export const lineCount = (): number => v().state.doc.lines;
 

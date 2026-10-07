@@ -3,7 +3,8 @@
   import { appState, settings } from './lib/config.svelte';
   import * as editor from './lib/editor';
   import { handleKeydown, handleWheel } from './lib/keys';
-  import { applyEditorSettings, baseName, boot, openPath, setStatus, startWatching, store } from './lib/tabs.svelte';
+  import { applyEditorSettings, baseName, boot, onEdit, openPath, setStatus, startWatching, store } from './lib/tabs.svelte';
+  import Dialog from './Dialog.svelte';
   import Palette from './Palette.svelte';
   import StatusBar from './StatusBar.svelte';
   import TitleBar from './TitleBar.svelte';
@@ -18,7 +19,7 @@
   let osLight = $state(systemLight.matches);
 
   onMount(() => {
-    editor.createEditor(host, setStatus);
+    editor.createEditor(host, setStatus, onEdit);
     const onOs = (e: MediaQueryListEvent) => (osLight = e.matches);
     systemLight.addEventListener('change', onOs);
     // Not via <svelte:window>: a window-level wheel listener is passive there, and we need preventDefault.
@@ -45,7 +46,13 @@
   $effect(() => {
     void settings.wordWrap;
     void settings.lineNumbers;
+    void settings.editable;
     untrack(applyEditorSettings);
+  });
+
+  $effect(() => {
+    const tb = store.active;
+    document.title = tb ? `${tb.dirty ? '● ' : ''}${tb.name} — Codepad` : 'Codepad';
   });
 </script>
 
@@ -75,4 +82,5 @@
 
 <StatusBar />
 <Palette />
+<Dialog />
 <UpdateNotice />

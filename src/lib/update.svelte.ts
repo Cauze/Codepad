@@ -67,8 +67,12 @@ export async function checkForUpdates(manual: boolean): Promise<void> {
   }
 }
 
+/** Set by the tab code: installing restarts the app, so unsaved edits get a chance to be saved first. */
+export const hooks = { beforeInstall: async (): Promise<boolean> => true };
+
 export async function installUpdate(): Promise<void> {
   if (!upd.info || busy()) return;
+  if (!(await hooks.beforeInstall())) return;
   upd.phase = 'downloading';
   upd.done = 0;
   upd.total = upd.info.size;

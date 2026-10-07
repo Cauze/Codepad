@@ -1,10 +1,12 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { DEFAULTS, changeSetting, setFontSize, settings } from './config.svelte';
+import { dlg } from './dialog.svelte';
 import { gotoLine, switchTab, togglePalette } from './commands';
 import { closePalette } from './palette.svelte';
-import { activate, closeTab, cycle, pickFiles, store } from './tabs.svelte';
+import { activate, closeTab, cycle, pickFiles, saveAll, saveTab, store } from './tabs.svelte';
 
 export function handleKeydown(e: KeyboardEvent): void {
+  if (dlg.open) return; // the dialog handles its own keys
   const mod = e.ctrlKey || e.metaKey;
 
   if (e.key === 'F1' || (mod && e.shiftKey && e.key.toLowerCase() === 'p')) {
@@ -22,7 +24,12 @@ export function handleKeydown(e: KeyboardEvent): void {
   const k = e.key;
   const has = !!store.active;
   if (k === 'o') { e.preventDefault(); closePalette(); void pickFiles(); }
-  else if (k === 'w') { e.preventDefault(); closePalette(); if (store.active) closeTab(store.active); }
+  else if (k === 'w') { e.preventDefault(); closePalette(); if (store.active) void closeTab(store.active); }
+  else if (k.toLowerCase() === 's') {
+    e.preventDefault();
+    if (e.shiftKey) void saveAll();
+    else if (store.active) void saveTab(store.active);
+  }
   else if (k === 'q') { e.preventDefault(); void getCurrentWindow().close(); }
   else if (k === 'p' && !e.shiftKey) { e.preventDefault(); if (has) void switchTab(); }
   else if (k === 'g') { e.preventDefault(); if (has) void gotoLine(); }
