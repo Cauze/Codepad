@@ -80,6 +80,7 @@ Settings live in `%APPDATA%\Codepad\settings.json`. Open it with **Open Settings
   "checkForUpdates": true,
   "cursorStyle": "line",
   "cursorBlink": true,
+  "smoothCursor": false,
   "fontSize": 13.5,
   "fontFamily": "",
   "lineHeight": 1.6,
@@ -98,6 +99,7 @@ Settings live in `%APPDATA%\Codepad\settings.json`. Open it with **Open Settings
 | `checkForUpdates` | `true` looks for a newer release a few seconds after launch and shows a notice if there is one. `false` only checks when you ask. |
 | `cursorStyle` | `"line"`, `"block"`, `"underline"` |
 | `cursorBlink` | `true` / `false` |
+| `smoothCursor` | `true` glides the cursor to its new position instead of jumping. `false` jumps. |
 | `fontSize` | 9 to 28 |
 | `fontFamily` | Any installed font, e.g. `"JetBrains Mono"`. Empty uses the built-in monospace stack. |
 | `lineHeight` | 1 to 3, as a multiple of the font size |

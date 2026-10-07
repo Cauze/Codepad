@@ -121,6 +121,7 @@ export const commands: Command[] = [
   cursor('block', 'Block'),
   cursor('underline', 'Underline'),
   { title: 'Toggle Cursor Blinking', run: () => changeSetting('cursorBlink', !settings.cursorBlink) },
+  { title: 'Toggle Smooth Cursor', run: () => changeSetting('smoothCursor', !settings.smoothCursor) },
   theme('system', 'System'),
   theme('dark', 'Dark'),
   theme('light', 'Light'),

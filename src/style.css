@@ -125,6 +125,7 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 :root[data-cursor="block"] .cm-editor .cm-cursor { border: 0; margin-left: 0; width: 1ch; background: color-mix(in srgb, var(--caret) 55%, transparent); }
 :root[data-cursor="underline"] .cm-editor .cm-cursor { border-left: 0; border-bottom: 2px solid var(--caret); margin-left: 0; width: 1ch; }
 :root[data-blink="off"] .cm-editor .cm-cursorLayer { animation: none !important; }
+:root[data-smooth="on"] .cm-editor .cm-cursor { transition: left .09s ease-out, top .09s ease-out, width .09s ease-out; }
 .cm-editor .cm-line { padding: 0 16px 0 10px; }
 .cm-editor .cm-gutters { background: var(--bg); color: var(--gutter); border: 0; user-select: none; }
 .cm-editor .cm-lineNumbers .cm-gutterElement { padding: 0 14px 0 18px; min-width: 3.2em; }
