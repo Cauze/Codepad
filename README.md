@@ -68,7 +68,7 @@ Every download is checked against the SHA-256 checksum GitHub publishes for the 
 
 ## Settings
 
-Settings live in `%APPDATA%\Codepad\settings.json`. Open it with **Open Settings File** in the command palette. Changes are picked up while Codepad is running.
+Settings live in `%APPDATA%\Codepad\settings.json`. Open it with **Open Settings File** in the command palette. It is always editable, even with `editable` off, and saving it applies the changes immediately. Changes are picked up while Codepad is running.
 
 ```json
 {

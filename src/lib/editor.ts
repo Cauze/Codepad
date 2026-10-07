@@ -59,11 +59,13 @@ const wrapExt = (): Extension => (settings.wordWrap ? EditorView.lineWrapping : 
 const numbersExt = (): Extension => (settings.lineNumbers ? [lineNumbers(), highlightActiveLineGutter()] : []);
 /** Editing needs the setting on AND a file we can write back faithfully (not binary, too large, or non-UTF-8). */
 const editComp = new Compartment();
-const editExt = (fileEditable: boolean): Extension => EditorState.readOnly.of(!(settings.editable && fileEditable));
-const settingEffects = (fileEditable: boolean) => [
+/** 'no': can't be written back safely; 'setting': follows the `editable` setting; 'always': e.g. Codepad's own settings file. */
+export type EditMode = 'no' | 'setting' | 'always';
+const editExt = (mode: EditMode): Extension => EditorState.readOnly.of(!(mode === 'always' || (mode === 'setting' && settings.editable)));
+const settingEffects = (mode: EditMode) => [
   wrapComp.reconfigure(wrapExt()),
   numbersComp.reconfigure(numbersExt()),
-  editComp.reconfigure(editExt(fileEditable)),
+  editComp.reconfigure(editExt(mode)),
 ];
 
 /** Indent unit of a file: a tab if tab-indented lines dominate, else the smallest space indent seen (2-8). */
@@ -94,11 +96,11 @@ export function statusOf(st: EditorState): Status {
   return { pos: `Ln ${line.number}, Col ${head - line.from + 1}`, lines: `${st.doc.lines.toLocaleString()} lines` };
 }
 
-export function makeState(doc: string, lang: Lang, fileEditable: boolean): EditorState {
+export function makeState(doc: string, lang: Lang, mode: EditMode): EditorState {
   return EditorState.create({
     doc,
     extensions: [
-      editComp.of(editExt(fileEditable)),
+      editComp.of(editExt(mode)),
       indentUnit.of(detectIndent(doc)),
       history(),
       closeBrackets(),
@@ -162,10 +164,10 @@ export const focus = (): void => view?.focus();
 export const requestMeasure = (): void => view?.requestMeasure();
 
 /** Re-apply wrap / line-number / editable settings: to a stored state (inactive tab)... */
-export const reconfigure = (state: EditorState, fileEditable: boolean): EditorState =>
-  state.update({ effects: settingEffects(fileEditable) }).state;
+export const reconfigure = (state: EditorState, mode: EditMode): EditorState =>
+  state.update({ effects: settingEffects(mode) }).state;
 /** ...or to the live view (active tab). */
-export const reconfigureActive = (fileEditable: boolean): void => view?.dispatch({ effects: settingEffects(fileEditable) });
+export const reconfigureActive = (mode: EditMode): void => view?.dispatch({ effects: settingEffects(mode) });
 
 export const lineCount = (): number => v().state.doc.lines;
 

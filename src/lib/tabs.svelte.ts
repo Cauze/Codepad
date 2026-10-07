@@ -5,7 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import type { EditorState, Text } from '@codemirror/state';
 import * as editor from './editor';
-import { appState, loadConfig, pollSettings, saveState, settings } from './config.svelte';
+import { appState, loadConfig, meta, pollSettings, saveState, settings } from './config.svelte';
 import { showDialog } from './dialog.svelte';
 import { hooks, initUpdates } from './update.svelte';
 
@@ -22,6 +22,12 @@ interface FileData {
 }
 
 export const baseName = (p: string): string => p.split(/[\\/]/).pop() ?? p;
+const sameFile = (a: string, b: string): boolean => !!b && a.replace(/\//g, '\\').toLowerCase() === b.replace(/\//g, '\\').toLowerCase();
+
+/** Codepad's own settings.json is always editable, whatever the `editable` setting says. */
+const editModeFor = (path: string, writable: boolean): editor.EditMode =>
+  !writable ? 'no' : sameFile(path, meta.settingsPath) ? 'always' : 'setting';
+
 export const dirName = (p: string): string => p.split(/[\\/]/).slice(-2, -1)[0] ?? '';
 
 export class Tab {
@@ -80,7 +86,10 @@ export function flash(msg: string, err = false): void {
 }
 
 /** Whether keystrokes in this tab change the document. */
-export const canEdit = (tb: Tab | null): boolean => !!tb && tb.writable && settings.editable;
+export const canEdit = (tb: Tab | null): boolean => {
+  const mode = tb && editModeFor(tb.path, tb.writable);
+  return mode === 'always' || (mode === 'setting' && settings.editable);
+};
 
 export function setStatus(s: editor.Status): void {
   status.pos = s.pos;
@@ -151,8 +160,9 @@ export function cycle(dir: 1 | -1): void {
 /** Push wrap / line-number / editable settings into every open tab. */
 export function applyEditorSettings(): void {
   for (const tb of store.tabs) {
-    if (tb === store.active) editor.reconfigureActive(tb.writable);
-    else tb.state = editor.reconfigure(tb.state, tb.writable);
+    const mode = editModeFor(tb.path, tb.writable);
+    if (tb === store.active) editor.reconfigureActive(mode);
+    else tb.state = editor.reconfigure(tb.state, mode);
   }
 }
 
@@ -271,7 +281,7 @@ async function readInto(path: string) {
   const data = await invoke<FileData>('read_file', { path });
   const lang = data.note != null ? { support: [], label: 'Plain Text' } : await editor.languageFor(baseName(path));
   const writable = data.content != null && !data.lossy;
-  return { data, lang, state: editor.makeState(data.note ?? data.content ?? '', lang, writable) };
+  return { data, lang, state: editor.makeState(data.note ?? data.content ?? '', lang, editModeFor(data.path, writable)) };
 }
 
 async function reloadTab(tb: Tab): Promise<void> {
