@@ -19,7 +19,7 @@ It's inspired by [Markpad](https://github.com/sftwrdotdev/Markpad), which does t
 - **Live updates.** Files are re-read when they change on disk, so Codepad works as a viewer for logs and generated output.
 - **Command palette** (`F1` or `Ctrl+Shift+P`) with fuzzy search for everything: open and close files, switch tabs, go to line, zoom, theme, and more.
 - **Light editing, off by default.** Turn on `editable` for undo/redo, auto-indent, `Ctrl+S`, an unsaved dot on the tab, and a prompt before you close anything unsaved. Optional auto save.
-- **Find** (`Ctrl+F`) with a VS Code-style floating widget: match case, whole word, regex, match count.
+- **Find** (`Ctrl+F`) with a VS Code-style floating widget: match case, whole word, regex, match count, and replace (with capture groups) when editing is on.
 - **Dark and light themes**, or follow the system setting.
 - **Updates itself on request.** A quiet notice tells you when a new release is out; nothing downloads or installs until you say so.
 - **Remembers your tabs** between launches, or starts empty if you'd rather.
@@ -46,7 +46,7 @@ Open files with `Ctrl+O`, drag them onto the window, or run `Codepad.exe path\to
 | `Ctrl+O` | Open file |
 | `Ctrl+P` | Switch tab |
 | `Ctrl+G` | Go to line (`42` or `42:7`) |
-| `Ctrl+F` | Find |
+| `Ctrl+F` / `Ctrl+H` | Find / find and replace (when editing is on) |
 | `Ctrl+S` / `Ctrl+Shift+S` | Save / save all (when editing is on) |
 | `Ctrl+W` | Close current file |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |

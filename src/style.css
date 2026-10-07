@@ -134,7 +134,12 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 /* find widget: floats over the top-right of the editor instead of pushing the text down */
 .cm-editor .cm-panels.cm-panels-top { position: absolute; top: 0; right: 18px; left: auto; width: auto; background: none; border: 0; z-index: 30; }
 .cm-editor .cm-panels-top .cm-panel { background: none; padding: 0; }
-.find { display: flex; align-items: center; gap: 2px; padding: 6px 6px 6px 8px; background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 8px 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); font: 12px var(--ui); color: var(--fg); user-select: none; }
+.find { display: flex; align-items: stretch; gap: 2px; padding: 6px 6px 6px 8px; background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 8px 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); font: 12px var(--ui); color: var(--fg); user-select: none; }
+.find [hidden] { display: none !important; }
+.find-rows { display: flex; flex-direction: column; gap: 4px; }
+.find-row { display: flex; align-items: center; gap: 2px; }
+.find-toggle { width: 16px !important; height: auto !important; align-self: stretch; margin-right: 2px; }
+.find button.txt { width: auto; padding: 0 8px; font: 11.5px var(--ui); }
 .find-box { display: flex; align-items: center; width: 232px; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding-right: 2px; }
 .find-box:focus-within { border-color: var(--accent); }
 .find-box.bad { border-color: var(--syn-tag); }

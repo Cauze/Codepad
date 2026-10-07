@@ -7,7 +7,7 @@ import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/sea
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { tags as t } from '@lezer/highlight';
 import { settings } from './config.svelte';
-import { createFindPanel } from './findPanel';
+import { createFindPanel, openReplace } from './findPanel';
 
 /*
  * The CodeMirror side. One EditorView is shared by all tabs; each tab keeps its own EditorState
@@ -112,7 +112,7 @@ export function makeState(doc: string, lang: Lang, fileEditable: boolean): Edito
       highlightSelectionMatches(),
       search({ top: true, createPanel: createFindPanel }),
       syntaxHighlighting(highlight),
-      keymap.of([...findKeys, ...foldKeymap, ...historyKeymap, ...closeBracketsKeymap, indentWithTab, ...defaultKeymap]),
+      keymap.of([{ key: 'Mod-h', run: openReplace }, ...findKeys, ...foldKeymap, ...historyKeymap, ...closeBracketsKeymap, indentWithTab, ...defaultKeymap]),
       lang.support,
       EditorView.updateListener.of((u) => {
         if (u.selectionSet || u.docChanged) onStatus(statusOf(u.state));
