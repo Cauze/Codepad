@@ -27,7 +27,7 @@ It's inspired by [Markpad](https://github.com/sftwrdotdev/Markpad), which does t
 
 ## Install
 
-Download the latest build from the [Releases page](https://github.com/fnnq/Codepad/releases/latest):
+Download the latest build from the [Releases page](https://github.com/Cauze/Codepad/releases/latest):
 
 | File | |
 | --- | --- |
