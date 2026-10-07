@@ -11,6 +11,7 @@ export type Theme = 'system' | 'dark' | 'light';
 export type Startup = 'restore' | 'empty';
 /** When edited files are written back without asking. */
 export type AutoSave = 'off' | 'afterDelay' | 'onFocusChange';
+export type CursorStyle = 'line' | 'block' | 'underline';
 
 export interface Settings {
   theme: Theme;
@@ -24,6 +25,10 @@ export interface Settings {
   startup: Startup;
   /** Look for a newer release shortly after launch (it only ever shows a notice). */
   checkForUpdates: boolean;
+  /** Shape of the text cursor. */
+  cursorStyle: CursorStyle;
+  /** Whether the cursor blinks. */
+  cursorBlink: boolean;
   /** px, 9-28 */
   fontSize: number;
   /** e.g. "JetBrains Mono"; empty = built-in stack */
@@ -55,6 +60,8 @@ export const DEFAULTS: Readonly<Settings> = Object.freeze({
   autoSaveDelay: 1000,
   startup: 'restore',
   checkForUpdates: true,
+  cursorStyle: 'line',
+  cursorBlink: true,
   fontSize: 13.5,
   fontFamily: '',
   lineHeight: 1.6,
@@ -81,6 +88,8 @@ function sanitize(raw: unknown): Settings {
     autoSaveDelay: Math.round(num(o.autoSaveDelay, 200, 60000, DEFAULTS.autoSaveDelay)),
     startup: o.startup === 'restore' || o.startup === 'empty' ? o.startup : DEFAULTS.startup,
     checkForUpdates: typeof o.checkForUpdates === 'boolean' ? o.checkForUpdates : DEFAULTS.checkForUpdates,
+    cursorStyle: o.cursorStyle === 'line' || o.cursorStyle === 'block' || o.cursorStyle === 'underline' ? o.cursorStyle : DEFAULTS.cursorStyle,
+    cursorBlink: typeof o.cursorBlink === 'boolean' ? o.cursorBlink : DEFAULTS.cursorBlink,
     fontSize: num(o.fontSize, 9, 28, DEFAULTS.fontSize),
     fontFamily: typeof o.fontFamily === 'string' ? o.fontFamily.trim() : DEFAULTS.fontFamily,
     lineHeight: num(o.lineHeight, 1, 3, DEFAULTS.lineHeight),

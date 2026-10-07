@@ -78,6 +78,8 @@ Settings live in `%APPDATA%\Codepad\settings.json`. Open it with **Open Settings
   "autoSaveDelay": 1000,
   "startup": "restore",
   "checkForUpdates": true,
+  "cursorStyle": "line",
+  "cursorBlink": true,
   "fontSize": 13.5,
   "fontFamily": "",
   "lineHeight": 1.6,
@@ -94,6 +96,8 @@ Settings live in `%APPDATA%\Codepad\settings.json`. Open it with **Open Settings
 | `autoSaveDelay` | Milliseconds to wait for `"afterDelay"`, 200 to 60000 |
 | `startup` | `"restore"` reopens the tabs from last time, `"empty"` starts with none |
 | `checkForUpdates` | `true` looks for a newer release a few seconds after launch and shows a notice if there is one. `false` only checks when you ask. |
+| `cursorStyle` | `"line"`, `"block"`, `"underline"` |
+| `cursorBlink` | `true` / `false` |
 | `fontSize` | 9 to 28 |
 | `fontFamily` | Any installed font, e.g. `"JetBrains Mono"`. Empty uses the built-in monospace stack. |
 | `lineHeight` | 1 to 3, as a multiple of the font size |

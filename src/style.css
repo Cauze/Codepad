@@ -9,6 +9,7 @@
   --fg-faint: #4a5063;
   --accent: #7aa2f7;
   --sel: #2d3b5e;
+  --caret: #c0caf5;
   --line-active: rgb(192 202 245 / 0.045); /* translucent so the selection layer underneath still shows */
   --gutter: #3b4157;
   --gutter-active: #8890ad;
@@ -46,6 +47,7 @@
     --fg-faint: #a3a9bd;
     --accent: #3b6fd4;
     --sel: #cddcf8;
+    --caret: #343b58;
     --line-active: rgb(52 59 88 / 0.05);
     --gutter: #b4b9ca;
     --gutter-active: #5a6180;
@@ -116,6 +118,13 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 .cm-editor { background: var(--bg); color: var(--fg); font-size: var(--fs); outline: none !important; }
 .cm-editor .cm-scroller { font-family: var(--mono); line-height: var(--lh); font-variant-ligatures: none; }
 .cm-editor .cm-content { padding: 10px 0; caret-color: transparent; }
+
+/* text cursor: colour from the theme, shape and blinking from the settings (data-cursor / data-blink on <html>) */
+.cm-editor .cm-cursor, .cm-editor .cm-dropCursor { border-left: 2px solid var(--caret); margin-left: -1px; }
+.cm-editor .cm-cursor-secondary { border-left-color: var(--caret); }
+:root[data-cursor="block"] .cm-editor .cm-cursor { border: 0; margin-left: 0; width: 1ch; background: color-mix(in srgb, var(--caret) 55%, transparent); }
+:root[data-cursor="underline"] .cm-editor .cm-cursor { border-left: 0; border-bottom: 2px solid var(--caret); margin-left: 0; width: 1ch; }
+:root[data-blink="off"] .cm-editor .cm-cursorLayer { animation: none !important; }
 .cm-editor .cm-line { padding: 0 16px 0 10px; }
 .cm-editor .cm-gutters { background: var(--bg); color: var(--gutter); border: 0; user-select: none; }
 .cm-editor .cm-lineNumbers .cm-gutterElement { padding: 0 14px 0 18px; min-width: 3.2em; }

@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { DEFAULTS, changeSetting, meta, setFontSize, settings, type AutoSave, type Startup, type Theme } from './config.svelte';
+import { DEFAULTS, changeSetting, meta, setFontSize, settings, type AutoSave, type CursorStyle, type Startup, type Theme } from './config.svelte';
 import * as editor from './editor';
 import { ask, closePalette, openList, pal, pick, type Item } from './palette.svelte';
 import { checkForUpdates, installUpdate, upd } from './update.svelte';
@@ -73,6 +73,12 @@ const autoSave = (name: AutoSave, label: string): Command => ({
   run: () => changeSetting('autoSave', name),
 });
 
+const cursor = (name: CursorStyle, label: string): Command => ({
+  title: `Cursor: ${label}`,
+  when: () => settings.cursorStyle !== name,
+  run: () => changeSetting('cursorStyle', name),
+});
+
 const startup = (name: Startup, label: string): Command => ({
   title: `Startup: ${label}`,
   when: () => settings.startup !== name,
@@ -111,6 +117,10 @@ export const commands: Command[] = [
   { title: 'Reset Zoom', keys: 'Ctrl+0', when: () => settings.fontSize !== DEFAULTS.fontSize, run: () => setFontSize(DEFAULTS.fontSize) },
   { title: 'Toggle Word Wrap', keys: 'Alt+Z', run: () => changeSetting('wordWrap', !settings.wordWrap) },
   { title: 'Toggle Line Numbers', run: () => changeSetting('lineNumbers', !settings.lineNumbers) },
+  cursor('line', 'Line'),
+  cursor('block', 'Block'),
+  cursor('underline', 'Underline'),
+  { title: 'Toggle Cursor Blinking', run: () => changeSetting('cursorBlink', !settings.cursorBlink) },
   theme('system', 'System'),
   theme('dark', 'Dark'),
   theme('light', 'Light'),

@@ -35,6 +35,8 @@
   $effect(() => {
     const root = document.documentElement;
     root.dataset.theme = settings.theme === 'system' ? (osLight ? 'light' : 'dark') : settings.theme;
+    root.dataset.cursor = settings.cursorStyle;
+    root.dataset.blink = settings.cursorBlink ? 'on' : 'off';
     root.style.setProperty('--fs', settings.fontSize + 'px');
     root.style.setProperty('--lh', String(settings.lineHeight));
     const ff = settings.fontFamily;
