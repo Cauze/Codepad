@@ -37,14 +37,14 @@ Download the latest build from the [Releases page](https://github.com/Cauze/Code
 
 | File | |
 | --- | --- |
-| `Codepad_x.y.z_x64-setup.exe` | Installer. Asks whether to add **Open with Codepad** to the right-click menu; uninstalling removes it again. |
+| `Codepad_x.y.z_x64-setup.exe` | Installer. Asks whether to add **Open with Codepad** to the right-click menu and `codepad` to your PATH; uninstalling removes both again. |
 | `Codepad_x.y.z_x64-portable.exe` | Portable: a single exe, nothing to install |
 
 Windows 10 or 11 is required. The builds aren't code-signed yet, so SmartScreen may warn you the first time you run them.
 
 ## Usage
 
-Open files with `Ctrl+O`, drag them onto the window, or run `Codepad.exe path\to\file.rs`. Everything else is in the command palette, so if you only remember one shortcut, make it `F1`.
+Open files with `Ctrl+O`, drag them onto the window, or run `Codepad.exe path\to\file.rs`. If you add Codepad to your PATH (the installer offers it, or use **Command Line: Add "codepad" to PATH** in the palette), `codepad file.rs` works from any terminal: cmd, PowerShell and Git Bash. Open a new terminal after turning it on. Everything else is in the command palette, so if you only remember one shortcut, make it `F1`.
 
 | Shortcut | Action |
 | --- | --- |

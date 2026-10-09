@@ -104,6 +104,18 @@ async function setExplorerMenu(enabled: boolean): Promise<void> {
   }
 }
 
+/** Whether `codepad` is on the user's PATH (null until we've asked). */
+let pathOn: boolean | null = null;
+void invoke<boolean>('path_enabled').then((on) => { pathOn = on; }).catch(() => {});
+async function setPath(enabled: boolean): Promise<void> {
+  try {
+    pathOn = await invoke<boolean>('set_path', { enabled });
+    notify(pathOn ? 'Added "codepad" to your PATH. Open a new terminal, then try: codepad file.txt' : 'Removed "codepad" from your PATH.');
+  } catch (e) {
+    notify(`Couldn't change the PATH: ${errText(e)}`, 'error');
+  }
+}
+
 const manyTabs = () => store.tabs.length > 1;
 const isMd = () => !!store.active?.isMd;
 
@@ -229,6 +241,16 @@ export const commands: Command[] = [
     title: 'Explorer Menu: Remove "Open with Codepad"',
     when: () => menuOn === true,
     run: () => void setExplorerMenu(false),
+  },
+  {
+    title: 'Command Line: Add "codepad" to PATH',
+    when: () => pathOn === false,
+    run: () => void setPath(true),
+  },
+  {
+    title: 'Command Line: Remove "codepad" from PATH',
+    when: () => pathOn === true,
+    run: () => void setPath(false),
   },
   { title: 'Open Settings File', run: () => void openPath(meta.settingsPath) },
   { title: 'Close Codepad', keys: 'Ctrl+Q', run: () => void getCurrentWindow().close() },

@@ -324,7 +324,7 @@ pub fn run() {
             std::thread::spawn(shell::heal);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, write_file, save_dialog, read_image_data, open_external, shell::context_menu_enabled, shell::set_context_menu, file_mtime, initial_files,
+        .invoke_handler(tauri::generate_handler![read_file, write_file, save_dialog, read_image_data, open_external, shell::context_menu_enabled, shell::set_context_menu, shell::path_enabled, shell::set_path, file_mtime, initial_files,
             canonical_path,
             read_config,
             write_config,

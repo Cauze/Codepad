@@ -1,10 +1,14 @@
-//! "Open with Codepad" in Explorer's right-click menu, for text and code files only.
+//! Two optional bits of shell integration, both per-user and both switched on and off from the command palette:
+//!
+//! 1. "Open with Codepad" in Explorer's right-click menu, for text and code files only.
 //!
 //! One key per extension under `HKCU\Software\Classes\SystemFileAssociations\.ext\shell\Codepad`.
 //! That adds a menu entry without touching which program owns the file type. Everything is
 //! per-user (no admin rights) and `unregister` removes it all again.
+//!
+//! 2. `codepad` on the PATH, so `codepad notes.txt` works in any terminal (see the `path` section below).
 
-use std::path::PathBuf;
+use std::{fs, path::{Path, PathBuf}};
 use winreg::{enums::*, RegKey};
 
 const EXTENSIONS: &[&str] = &[
@@ -69,6 +73,7 @@ pub fn is_registered() -> bool {
 
 /// If the menu is on but points at an exe that has moved or gone (e.g. a portable copy was moved), point it here.
 pub fn heal() {
+    heal_path();
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let Ok(key) = hkcu.open_subkey(format!(r"{CLASSES}\.txt\shell\Codepad\command")) else { return };
     let Ok(current) = key.get_value::<String, _>("") else { return };
@@ -82,11 +87,118 @@ pub fn heal() {
     }
 }
 
-/// Handles `--register-context-menu` / `--unregister-context-menu` (used by the installer). True if one was given.
+// ---------- codepad on the PATH ----------
+//
+// A `bin` folder next to the app data holds two tiny launchers (`codepad.cmd` for cmd and PowerShell,
+// `codepad` for Git Bash) that start whichever exe turned it on. That folder is added to the user's PATH.
+// Pointing at a launcher rather than at the exe's own folder works for the portable build too.
+
+fn bin_dir() -> Result<PathBuf, String> {
+    let base = std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA isn't set")?;
+    Ok(PathBuf::from(base).join("Codepad").join("bin"))
+}
+
+fn cmd_launcher(exe: &Path) -> String {
+    // `start` so a batch file doesn't wait for the (GUI) app to exit
+    format!("@echo off\r\nstart \"\" \"{}\" %*\r\n", exe.display())
+}
+
+fn sh_launcher(exe: &Path) -> String {
+    format!("#!/bin/sh\n\"{}\" \"$@\" >/dev/null 2>&1 &\n", exe.display().to_string().replace('\\', "/"))
+}
+
+fn same_dir(a: &str, b: &Path) -> bool {
+    a.trim().trim_end_matches('\\').eq_ignore_ascii_case(b.to_string_lossy().trim_end_matches('\\'))
+}
+
+/// Tell running programs (Explorer, so new terminals) that the environment changed.
+fn broadcast_env_change() {
+    #[link(name = "user32")]
+    extern "system" {
+        fn SendMessageTimeoutW(hwnd: isize, msg: u32, wparam: usize, lparam: *const u16, flags: u32, timeout: u32, result: *mut usize) -> isize;
+    }
+    let env: Vec<u16> = "Environment\0".encode_utf16().collect();
+    let mut out = 0usize;
+    // HWND_BROADCAST, WM_SETTINGCHANGE, SMTO_ABORTIFHUNG
+    unsafe { SendMessageTimeoutW(0xffff, 0x001A, 0, env.as_ptr(), 0x0002, 2000, &mut out) };
+}
+
+fn edit_path(f: impl FnOnce(Vec<String>) -> Vec<String>) -> Result<(), String> {
+    let env = RegKey::predef(HKEY_CURRENT_USER).open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE).map_err(|e| e.to_string())?;
+    let current: String = env.get_value("Path").unwrap_or_default();
+    let parts: Vec<String> = current.split(';').filter(|p| !p.is_empty()).map(String::from).collect();
+    let new = f(parts.clone());
+    if new != parts {
+        // keep it expandable (%USERPROFILE% and friends) like Windows' own entries
+        let value = winreg::RegValue { vtype: REG_EXPAND_SZ, bytes: to_wide(&new.join(";")) };
+        env.set_raw_value("Path", &value).map_err(|e| e.to_string())?;
+        broadcast_env_change();
+    }
+    Ok(())
+}
+
+fn to_wide(s: &str) -> std::borrow::Cow<'static, [u8]> {
+    let mut v: Vec<u8> = s.encode_utf16().chain(std::iter::once(0)).flat_map(|u| u.to_le_bytes()).collect();
+    v.shrink_to_fit();
+    v.into()
+}
+
+pub fn register_path() -> Result<(), String> {
+    let exe = exe()?;
+    let dir = bin_dir()?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    fs::write(dir.join("codepad.cmd"), cmd_launcher(&exe)).map_err(|e| e.to_string())?;
+    fs::write(dir.join("codepad"), sh_launcher(&exe)).map_err(|e| e.to_string())?;
+    edit_path(|mut parts| {
+        if !parts.iter().any(|p| same_dir(p, &dir)) {
+            parts.push(dir.to_string_lossy().into_owned());
+        }
+        parts
+    })
+}
+
+pub fn unregister_path() -> Result<(), String> {
+    let dir = bin_dir()?;
+    edit_path(|parts| parts.into_iter().filter(|p| !same_dir(p, &dir)).collect())?;
+    let _ = fs::remove_file(dir.join("codepad.cmd"));
+    let _ = fs::remove_file(dir.join("codepad"));
+    let _ = fs::remove_dir(&dir); // only if empty
+    Ok(())
+}
+
+pub fn is_path_registered() -> bool {
+    let Ok(dir) = bin_dir() else { return false };
+    let on_path = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey("Environment")
+        .and_then(|k| k.get_value::<String, _>("Path"))
+        .map(|p| p.split(';').any(|x| same_dir(x, &dir)))
+        .unwrap_or(false);
+    on_path && dir.join("codepad.cmd").is_file()
+}
+
+/// Like `heal`: if the launchers point at an exe that is gone, point them at this one.
+fn heal_path() {
+    if !is_path_registered() {
+        return;
+    }
+    let (Ok(dir), Ok(me)) = (bin_dir(), exe()) else { return };
+    let Ok(current) = fs::read_to_string(dir.join("codepad.cmd")) else { return };
+    if current == cmd_launcher(&me) {
+        return;
+    }
+    let target = current.split('"').nth(3).unwrap_or("");
+    if !Path::new(target).exists() {
+        let _ = register_path();
+    }
+}
+
+/// Handles `--register-context-menu`, `--unregister-context-menu`, `--register-path` and `--unregister-path` (used by the installer). True if one was given.
 pub fn handle_cli() -> bool {
     match std::env::args().nth(1).as_deref() {
         Some("--register-context-menu") => { let _ = register(); true }
         Some("--unregister-context-menu") => { let _ = unregister(); true }
+        Some("--register-path") => { let _ = register_path(); true }
+        Some("--unregister-path") => { let _ = unregister_path(); true }
         _ => false,
     }
 }
@@ -100,4 +212,15 @@ pub fn context_menu_enabled() -> bool {
 pub fn set_context_menu(enabled: bool) -> Result<bool, String> {
     if enabled { register()? } else { unregister()? }
     Ok(is_registered())
+}
+
+#[tauri::command]
+pub fn path_enabled() -> bool {
+    is_path_registered()
+}
+
+#[tauri::command]
+pub fn set_path(enabled: bool) -> Result<bool, String> {
+    if enabled { register_path()? } else { unregister_path()? }
+    Ok(is_path_registered())
 }

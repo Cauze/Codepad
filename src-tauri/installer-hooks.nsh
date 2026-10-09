@@ -1,6 +1,6 @@
-; "Open with Codepad" in Explorer's right-click menu is optional. Codepad itself adds and removes the
-; entries (see src/shell.rs); the installer just asks once, on a fresh interactive install.
-; Updates and silent installs leave whatever the user already chose.
+; Two optional extras, "Open with Codepad" in Explorer's right-click menu and `codepad` on the PATH.
+; Codepad itself adds and removes them (see src/shell.rs); the installer just asks once, on a fresh
+; interactive install. Updates and silent installs leave whatever the user already chose.
 
 !macro NSIS_HOOK_POSTINSTALL
   ${If} $UpdateMode <> 1
@@ -8,12 +8,16 @@
     MessageBox MB_YESNO|MB_ICONQUESTION "Add $\"Open with Codepad$\" to the right-click menu of text and code files?$\r$\n$\r$\nYou can change this later from the command palette." IDNO skip_menu
     ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --register-context-menu'
     skip_menu:
+    MessageBox MB_YESNO|MB_ICONQUESTION "Add $\"codepad$\" to your PATH, so you can type $\"codepad file.txt$\" in a terminal?$\r$\n$\r$\nYou can change this later from the command palette." IDNO skip_path
+    ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --register-path'
+    skip_path:
   ${EndIf}
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
   ${If} $UpdateMode <> 1
     ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister-context-menu'
+    ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister-path'
   ${EndIf}
 !macroend
 
