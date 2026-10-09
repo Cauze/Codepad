@@ -102,8 +102,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); c
 #winctl #win-close:hover { background: #e5484d; color: #fff; }
 
 /* ---------- editor ---------- */
-#stage { position: relative; flex: 1; min-height: 0; }
+#stage { position: relative; flex: 1; min-height: 0; display: flex; }
+#editor { flex: 1 1 50%; min-width: 0; }
 #editor, #editor .cm-editor { height: 100%; }
+/* preview-only: keep the editor laid out (so it remembers its scroll) but out of sight */
+#editor.off { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
 #editor.hidden { visibility: hidden; }
 #empty { position: absolute; inset: 0; display: none; place-items: center; color: var(--fg-dim); }
 #empty.show { display: grid; }
@@ -258,3 +261,39 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 .cm-minimap-slider { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--fg) 14%, transparent); opacity: 0; transition: opacity .12s; pointer-events: auto; cursor: grab; }
 .cm-minimap:hover .cm-minimap-slider, .cm-minimap.slider-always .cm-minimap-slider { opacity: 1; }
 .cm-minimap-slider:active { cursor: grabbing; background: color-mix(in srgb, var(--fg) 22%, transparent); }
+
+/* ---------- markdown preview ---------- */
+#st-md { display: inline-flex; gap: 1px; padding: 1px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); }
+#st-md button { height: 16px; padding: 0 7px; border: 0; border-radius: 4px; background: none; color: var(--fg-dim); font: inherit; font-size: 11px; cursor: pointer; }
+#st-md button:hover { color: var(--fg); }
+#st-md button.on { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--fg); }
+#md { flex: 1 1 50%; min-width: 0; height: 100%; overflow: auto; position: relative; padding: 24px 36px 60px; box-sizing: border-box; background: var(--bg); color: var(--fg); font: 14px/1.7 var(--ui); user-select: text; outline: none; border-left: 1px solid var(--border); overflow-wrap: anywhere; }
+#stage:has(#editor.off) #md { border-left: 0; }
+#md > * { max-width: 860px; margin-left: auto; margin-right: auto; }
+#md h1, #md h2, #md h3, #md h4, #md h5, #md h6 { margin: 1.5em 0 .6em; line-height: 1.3; font-weight: 600; color: var(--fg); }
+#md > div:first-child > :first-child { margin-top: 0; }
+#md h1 { font-size: 2em; padding-bottom: .3em; border-bottom: 1px solid var(--border); }
+#md h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid var(--border); }
+#md h3 { font-size: 1.25em; } #md h4 { font-size: 1em; } #md h5 { font-size: .9em; } #md h6 { font-size: .85em; color: var(--fg-dim); }
+#md p, #md ul, #md ol, #md blockquote, #md pre, #md table, #md details { margin: 0 0 1em; }
+#md a { color: var(--accent); text-decoration: none; cursor: pointer; }
+#md a:hover { text-decoration: underline; }
+#md ul, #md ol { padding-left: 2em; }
+#md li + li { margin-top: .25em; }
+#md li > p { margin: 0 0 .4em; }
+#md input[type=checkbox] { margin: 0 .5em 0 -1.4em; vertical-align: middle; }
+#md ul:has(> li > input[type=checkbox]) { list-style: none; }
+#md blockquote { padding: .1em 1em; color: var(--fg-dim); border-left: 3px solid color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--surface) 60%, transparent); border-radius: 0 6px 6px 0; }
+#md blockquote > :last-child { margin-bottom: 0; }
+#md code { font: .88em var(--mono); padding: .15em .4em; border-radius: 5px; background: var(--surface); }
+#md pre { padding: 14px 16px; overflow: auto; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); line-height: 1.5; }
+#md pre code { padding: 0; background: none; font-size: .86em; white-space: pre; overflow-wrap: normal; }
+#md hr { height: 1px; border: 0; background: var(--border); margin: 1.6em auto; }
+#md img { max-width: 100%; height: auto; border-radius: 4px; }
+#md table { border-collapse: collapse; display: block; overflow: auto; }
+#md th, #md td { padding: 6px 13px; border: 1px solid var(--border); }
+#md th { background: var(--surface); font-weight: 600; }
+#md tr:nth-child(2n) td { background: color-mix(in srgb, var(--surface) 45%, transparent); }
+#md kbd { font-size: .85em; }
+#md summary { cursor: pointer; }
+#md mark { background: color-mix(in srgb, var(--syn-meta) 35%, transparent); color: inherit; border-radius: 3px; }

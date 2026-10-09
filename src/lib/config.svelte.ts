@@ -14,6 +14,8 @@ export type Startup = 'restore' | 'empty';
 export type AutoSave = 'off' | 'afterDelay' | 'onFocusChange';
 export type CursorStyle = 'line' | 'block' | 'underline';
 export type LineEnding = 'lf' | 'crlf';
+/** How a Markdown file is shown when opened: just the text, text + preview side by side, or only the rendered page. */
+export type MarkdownView = 'code' | 'split' | 'preview';
 
 export interface Settings {
   theme: Theme;
@@ -25,6 +27,8 @@ export interface Settings {
   autoSaveDelay: number;
   /** Line endings for new files. */
   defaultLineEnding: LineEnding;
+  /** How Markdown files open. */
+  markdownDefaultView: MarkdownView;
   /** "restore" reopens the tabs from last time; "empty" starts with none. */
   startup: Startup;
   /** Look for a newer release shortly after launch (it only ever shows a notice). */
@@ -69,6 +73,7 @@ export const DEFAULTS: Readonly<Settings> = Object.freeze({
   autoSave: 'off',
   autoSaveDelay: 1000,
   defaultLineEnding: 'lf',
+  markdownDefaultView: 'code',
   startup: 'restore',
   checkForUpdates: true,
   cursorStyle: 'line',
@@ -100,6 +105,7 @@ function sanitize(raw: unknown): Settings {
     autoSave: o.autoSave === 'off' || o.autoSave === 'afterDelay' || o.autoSave === 'onFocusChange' ? o.autoSave : DEFAULTS.autoSave,
     autoSaveDelay: Math.round(num(o.autoSaveDelay, 200, 60000, DEFAULTS.autoSaveDelay)),
     defaultLineEnding: o.defaultLineEnding === 'lf' || o.defaultLineEnding === 'crlf' ? o.defaultLineEnding : DEFAULTS.defaultLineEnding,
+    markdownDefaultView: o.markdownDefaultView === 'code' || o.markdownDefaultView === 'split' || o.markdownDefaultView === 'preview' ? o.markdownDefaultView : DEFAULTS.markdownDefaultView,
     startup: o.startup === 'restore' || o.startup === 'empty' ? o.startup : DEFAULTS.startup,
     checkForUpdates: typeof o.checkForUpdates === 'boolean' ? o.checkForUpdates : DEFAULTS.checkForUpdates,
     cursorStyle: o.cursorStyle === 'line' || o.cursorStyle === 'block' || o.cursorStyle === 'underline' ? o.cursorStyle : DEFAULTS.cursorStyle,

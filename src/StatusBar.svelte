@@ -2,6 +2,7 @@
   import { changeSetting, settings } from './lib/config.svelte';
   import { canEdit, setLineEnding, status, store } from './lib/tabs.svelte';
   import { encodingMenu } from './lib/commands';
+  import { setMdView } from './lib/markdown.svelte';
   import { encodingLabel } from './lib/encodings';
   import { showUpdateNotice, upd } from './lib/update.svelte';
 </script>
@@ -19,6 +20,14 @@
       title={settings.editable ? "This file can't be edited (binary, too large, or not cleanly decodable)" : 'Editing is off. Click to turn it on.'}
       onclick={() => { if (!settings.editable) changeSetting('editable', true); }}
     >Read-only</button>
+  {/if}
+  {#if store.active?.isMd}
+    {@const tb = store.active}
+    <span id="st-md" role="group" aria-label="Markdown view">
+      <button class:on={tb.view === 'code'} onclick={() => void setMdView(tb, 'code')} title="Show the text only">Code</button>
+      <button class:on={tb.view === 'split'} onclick={() => void setMdView(tb, 'split')} title="Text and preview side by side">Split</button>
+      <button class:on={tb.view === 'preview'} onclick={() => void setMdView(tb, 'preview')} title="Show the rendered page (Ctrl+Shift+V)">Preview</button>
+    </span>
   {/if}
   <span id="st-lang">{store.active?.lang ?? ''}</span>
   {#if store.active?.writable}

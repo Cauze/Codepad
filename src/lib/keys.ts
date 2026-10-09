@@ -4,6 +4,7 @@ import { dlg } from './dialog.svelte';
 import { gotoLine, switchTab, togglePalette } from './commands';
 import { closePalette } from './palette.svelte';
 import { openSearch } from './searchTabs.svelte';
+import { togglePreview } from './markdown.svelte';
 import { activate, closeTab, cycle, newFile, pickFiles, saveAll, saveTab, saveTabAs, store } from './tabs.svelte';
 
 export function handleKeydown(e: KeyboardEvent): void {
@@ -26,6 +27,7 @@ export function handleKeydown(e: KeyboardEvent): void {
   const has = !!store.active;
   if (e.altKey && !e.shiftKey && k.toLowerCase() === 's') { e.preventDefault(); void saveAll(); return; }
   if (k.toLowerCase() === 'n' && !e.shiftKey && !e.altKey) { e.preventDefault(); closePalette(); newFile(); }
+  else if (k.toLowerCase() === 'v' && e.shiftKey && !e.altKey) { e.preventDefault(); togglePreview(store.active); }
   else if (k.toLowerCase() === 'f' && e.shiftKey && !e.altKey) { e.preventDefault(); openSearch(); }
   else if (k === 'o') { e.preventDefault(); closePalette(); void pickFiles(); }
   else if (k === 'w') { e.preventDefault(); closePalette(); if (store.active) void closeTab(store.active); }

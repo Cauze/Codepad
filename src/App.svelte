@@ -5,6 +5,7 @@
   import { handleKeydown, handleWheel } from './lib/keys';
   import { applyEditorSettings, baseName, boot, onEdit, openPath, setStatus, startWatching, store } from './lib/tabs.svelte';
   import Dialog from './Dialog.svelte';
+  import MarkdownPreview from './MarkdownPreview.svelte';
   import Notes from './Notes.svelte';
   import Palette from './Palette.svelte';
   import SearchTabs from './SearchTabs.svelte';
@@ -15,6 +16,8 @@
   const DEFAULT_MONO = "'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace";
 
   let host: HTMLDivElement;
+
+  const mdView = $derived(store.active?.isMd ? store.active.view : 'code');
 
   // "system" follows the OS; this tracks it so the effect below re-runs when it flips.
   const systemLight = matchMedia('(prefers-color-scheme: light)');
@@ -67,7 +70,8 @@
 <TitleBar />
 
 <main id="stage">
-  <div id="editor" class:hidden={!store.active} bind:this={host}></div>
+  <div id="editor" class:hidden={!store.active} class:off={mdView === 'preview'} bind:this={host}></div>
+  {#if mdView !== 'code'}<MarkdownPreview />{/if}
   <div id="empty" class:show={!store.active}>
     <div class="empty-inner">
       <div class="logo">{'{ }'}</div>

@@ -5,7 +5,7 @@ import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { languages } from '@codemirror/language-data';
 import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { tags as t } from '@lezer/highlight';
+import { tags as t, highlightTree } from '@lezer/highlight';
 import { settings } from './config.svelte';
 import { createFindPanel, openReplace } from './findPanel';
 import { minimapExtension } from './minimap';
@@ -134,6 +134,47 @@ export function createEditor(parent: HTMLElement, statusCallback: (s: Status) =>
   onStatus = statusCallback;
   onEdit = editCallback;
   view = new EditorView({ parent, state: EditorState.create({ doc: '' }) });
+  view.scrollDOM.addEventListener('scroll', () => { for (const cb of scrollListeners) cb(); }, { passive: true });
+}
+
+const scrollListeners = new Set<() => void>();
+/** Call `cb` whenever the editor scrolls. Returns the function that stops it. */
+export function onScroll(cb: () => void): () => void {
+  scrollListeners.add(cb);
+  return () => { scrollListeners.delete(cb); };
+}
+
+/** The line at the top of the editor's viewport, plus how far (0-1) into it we are. */
+export function topLine(): { line: number; frac: number } {
+  const e = v();
+  const top = e.scrollDOM.scrollTop;
+  const block = e.lineBlockAtHeight(top);
+  return { line: e.state.doc.lineAt(block.from).number, frac: block.height ? Math.min(1, Math.max(0, (top - block.top) / block.height)) : 0 };
+}
+
+/** Scroll so `line` (+ `frac` of it) is at the top of the editor. */
+export function scrollToLine(line: number, frac = 0): void {
+  const e = v();
+  const l = e.state.doc.line(Math.min(Math.max(Math.floor(line), 1), e.state.doc.lines));
+  const block = e.lineBlockAt(l.from);
+  e.scrollDOM.scrollTop = block.top + block.height * frac;
+}
+
+/** Code as HTML coloured with the editor's syntax theme, or null if the language isn't known. */
+export async function highlightCode(code: string, langName: string): Promise<string | null> {
+  const desc = LanguageDescription.matchLanguageName(languages, langName, true) ?? LanguageDescription.matchFilename(languages, `x.${langName}`);
+  if (!desc) return null;
+  let support;
+  try { support = await desc.load(); } catch { return null; }
+  const tree = support.language.parser.parse(code);
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let out = '', pos = 0;
+  highlightTree(tree, highlight, (from, to, cls) => {
+    if (from > pos) out += esc(code.slice(pos, from));
+    out += `<span class="${cls}">${esc(code.slice(from, to))}</span>`;
+    pos = to;
+  });
+  return out + esc(code.slice(pos));
 }
 
 function v(): EditorView {

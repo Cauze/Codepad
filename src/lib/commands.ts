@@ -7,6 +7,7 @@ import { checkForUpdates, installUpdate, upd } from './update.svelte';
 import { activate, canEdit, closeAll, closeAllExcept, closeTab, cycle, newFile, openPath, pickFiles, reopenWithEncoding, revertTab, saveAll, saveTab, saveTabAs, saveWithEncoding, setLineEnding, store } from './tabs.svelte';
 import { ENCODINGS, encodingLabel } from './encodings';
 import { openSearch } from './searchTabs.svelte';
+import { setMdView, togglePreview } from './markdown.svelte';
 
 export interface Command extends Item {
   /** Hidden from the palette while this returns false. */
@@ -91,6 +92,7 @@ async function copyText(text: string): Promise<void> {
 /* ---------- the list ---------- */
 const hasTab = () => !!store.active;
 const manyTabs = () => store.tabs.length > 1;
+const isMd = () => !!store.active?.isMd;
 
 const theme = (name: Theme, label: string): Command => ({
   title: `Theme: ${label}`,
@@ -121,6 +123,13 @@ export const commands: Command[] = [
   { title: 'Open File…', keys: 'Ctrl+O', run: () => void pickFiles() },
   { title: 'Switch Tab…', keys: 'Ctrl+P', when: hasTab, run: () => void switchTab() },
   { title: 'Go to Line…', keys: 'Ctrl+G', when: hasTab, run: () => void gotoLine() },
+  { title: 'Markdown: Toggle Preview', keys: 'Ctrl+Shift+V', when: isMd, run: () => togglePreview(store.active) },
+  { title: 'Markdown: Show Text and Preview Side by Side', when: () => isMd() && store.active!.view !== 'split', run: () => store.active && void setMdView(store.active, 'split') },
+  { title: 'Markdown: Show Text Only', when: () => isMd() && store.active!.view !== 'code', run: () => store.active && void setMdView(store.active, 'code') },
+  { title: 'Markdown: Show Preview Only', when: () => isMd() && store.active!.view !== 'preview', run: () => store.active && void setMdView(store.active, 'preview') },
+  { title: 'Markdown: Open Files as Text', when: () => settings.markdownDefaultView !== 'code', run: () => changeSetting('markdownDefaultView', 'code') },
+  { title: 'Markdown: Open Files Side by Side', when: () => settings.markdownDefaultView !== 'split', run: () => changeSetting('markdownDefaultView', 'split') },
+  { title: 'Markdown: Open Files as Preview', when: () => settings.markdownDefaultView !== 'preview', run: () => changeSetting('markdownDefaultView', 'preview') },
   { title: 'Search in Open Files…', keys: 'Ctrl+Shift+F', when: hasTab, run: openSearch },
   { title: 'Next Tab', keys: 'Ctrl+Tab', when: manyTabs, run: () => cycle(1) },
   { title: 'Previous Tab', keys: 'Ctrl+Shift+Tab', when: manyTabs, run: () => cycle(-1) },

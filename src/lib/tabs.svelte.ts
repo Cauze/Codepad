@@ -5,7 +5,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import type { EditorState, Text } from '@codemirror/state';
 import * as editor from './editor';
-import { appState, loadConfig, meta, pollSettings, saveState, settings } from './config.svelte';
+import { appState, loadConfig, meta, pollSettings, saveState, settings, type MarkdownView } from './config.svelte';
 import { showDialog } from './dialog.svelte';
 import { errText, notify } from './notify.svelte';
 import { restoreWindow, trackWindow } from './windowState';
@@ -25,6 +25,11 @@ interface FileData {
   lossy: boolean;
 }
 
+export const isMarkdown = (name: string): boolean => /\.(md|markdown|mdown|mkd|mkdn)$/i.test(name);
+/** Bumped whenever the text of the tab on screen may have changed, so the Markdown preview re-renders. */
+export const mdSync = $state({ tick: 0 });
+export const bumpPreview = (): void => { mdSync.tick++; };
+
 export const baseName = (p: string): string => p.split(/[\\/]/).pop() ?? p;
 const sameFile = (a: string, b: string): boolean => !!b && a.replace(/\//g, '\\').toLowerCase() === b.replace(/\//g, '\\').toLowerCase();
 
@@ -38,6 +43,9 @@ export class Tab {
   /** Full path; for a not-yet-saved file just a unique placeholder. */
   path = $state('');
   name = $state('');
+  /** For Markdown files: text, text + preview, or preview only. */
+  view = $state<MarkdownView>('code');
+  get isMd(): boolean { return isMarkdown(this.name); }
   /** Has text to search (not a binary / too-large placeholder). */
   searchable = false;
   /** Made with New File and not saved anywhere yet. */
@@ -72,6 +80,7 @@ export class Tab {
   constructor(path: string) {
     this.path = path;
     this.name = baseName(path);
+    if (isMarkdown(this.name)) this.view = settings.markdownDefaultView;
   }
 
   /** A new, empty, unsaved file. */
@@ -142,6 +151,7 @@ export function activate(tb: Tab | null): void {
   store.active = tb;
   if (tb) editor.show(tb.state, tb.scroll);
   else setStatus({ pos: '', lines: '' });
+  bumpPreview();
   persist();
 }
 
@@ -211,6 +221,7 @@ export function onEdit(doc: Text): void {
   const tb = store.active;
   if (!tb) return;
   tb.dirty = isDirty(tb, doc);
+  if (tb.isMd) bumpPreview();
   scheduleAutoSave(tb);
 }
 
@@ -431,7 +442,7 @@ async function readInto(path: string, encoding?: string) {
 async function reloadTab(tb: Tab, encoding?: string): Promise<void> {
   const { data, lang, state } = await readInto(tb.path, encoding);
   tb.load(data, state, lang.label);
-  if (tb === store.active) editor.replaceState(state);
+  if (tb === store.active) { editor.replaceState(state); bumpPreview(); }
 }
 
 const pending = new Map<string, Promise<void>>(); // canonical path -> in-flight open, so racing opens share one tab
