@@ -5,6 +5,7 @@
   import { handleKeydown, handleWheel } from './lib/keys';
   import { applyEditorSettings, baseName, boot, onEdit, openPath, setStatus, startWatching, store } from './lib/tabs.svelte';
   import Dialog from './Dialog.svelte';
+  import Notes from './Notes.svelte';
   import Palette from './Palette.svelte';
   import StatusBar from './StatusBar.svelte';
   import TitleBar from './TitleBar.svelte';
@@ -86,4 +87,5 @@
 <StatusBar />
 <Palette />
 <Dialog />
+<Notes />
 <UpdateNotice />

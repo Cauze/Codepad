@@ -7,6 +7,7 @@ import type { EditorState, Text } from '@codemirror/state';
 import * as editor from './editor';
 import { appState, loadConfig, meta, pollSettings, saveState, settings } from './config.svelte';
 import { showDialog } from './dialog.svelte';
+import { errText, notify } from './notify.svelte';
 import { hooks, initUpdates } from './update.svelte';
 
 interface FileData {
@@ -74,16 +75,7 @@ export class Tab {
 }
 
 export const store: { tabs: Tab[]; active: Tab | null } = $state({ tabs: [], active: null });
-export const status = $state({ pos: '', lines: '', flash: '', flashErr: false });
-
-let flashTimer: ReturnType<typeof setTimeout> | undefined;
-/** A short message in the status bar (save failures and the like). */
-export function flash(msg: string, err = false): void {
-  status.flash = msg;
-  status.flashErr = err;
-  clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => { status.flash = ''; }, 6000);
-}
+export const status = $state({ pos: '', lines: '' });
 
 /** Whether keystrokes in this tab change the document. */
 export const canEdit = (tb: Tab | null): boolean => {
@@ -168,7 +160,6 @@ export function applyEditorSettings(): void {
 
 /* ---------- saving ---------- */
 const docOf = (tb: Tab): Text => (tb === store.active ? editor.currentState() : tb.state).doc;
-const errText = (e: unknown): string => (typeof e === 'string' ? e : e instanceof Error ? e.message : 'Unknown error');
 
 const saving = new Map<Tab, Promise<boolean>>(); // per-tab queue, so two saves never write at once
 const autoTimers = new Map<Tab, ReturnType<typeof setTimeout>>();
@@ -213,7 +204,7 @@ async function doSave(tb: Tab, { auto = false, force = false }): Promise<boolean
   } catch (e) {
     if (e === 'CONFLICT') {
       tb.stale = true;
-      if (auto) { flash(`${tb.name} changed on disk, so it wasn't auto-saved`, true); return false; }
+      if (auto) { notify(`${tb.name} changed on disk, so it wasn't auto-saved`, 'error'); return false; }
       if (tb !== store.active) activate(tb);
       const pick = await showDialog({
         title: `${tb.name} changed on disk`,
@@ -225,7 +216,7 @@ async function doSave(tb: Tab, { auto = false, force = false }): Promise<boolean
       });
       return pick === 'overwrite' ? doSave(tb, { auto, force: true }) : false;
     }
-    if (auto) { flash(`Couldn't save ${tb.name}: ${errText(e)}`, true); return false; }
+    if (auto) { notify(`Couldn't save ${tb.name}: ${errText(e)}`, 'error'); return false; }
     await showDialog({ title: `Couldn't save ${tb.name}`, message: errText(e), buttons: [{ label: 'OK', value: 'ok', primary: true }] });
     return false;
   }
@@ -273,7 +264,7 @@ export async function revertTab(tb: Tab): Promise<void> {
     });
     if (pick !== 'discard') return;
   }
-  try { await reloadTab(tb); } catch (e) { flash(`Couldn't reload ${tb.name}: ${errText(e)}`, true); }
+  try { await reloadTab(tb); } catch (e) { notify(`Couldn't reload ${tb.name}: ${errText(e)}`, 'error'); }
 }
 
 /* ---------- files ---------- */
@@ -292,8 +283,15 @@ async function reloadTab(tb: Tab): Promise<void> {
 
 const pending = new Map<string, Promise<void>>(); // canonical path -> in-flight open, so racing opens share one tab
 
-export async function openPath(rawPath: string): Promise<void> {
-  const path = await invoke<string>('canonical_path', { path: rawPath });
+/** Opens a file in a tab. Failures are reported with a toast unless `silent` (session restore). */
+export async function openPath(rawPath: string, silent = false): Promise<void> {
+  let path: string;
+  try {
+    path = await invoke<string>('canonical_path', { path: rawPath });
+  } catch (e) {
+    failOpen(rawPath, e, silent);
+    return;
+  }
   const key = path.toLowerCase();
   const existing = store.tabs.find((t) => t.path.toLowerCase() === key);
   if (existing) { activate(existing); return; }
@@ -309,13 +307,21 @@ export async function openPath(rawPath: string): Promise<void> {
       pushRecent(data.path);
       activate(tb);
     } catch (e) {
-      console.error(e);
+      failOpen(path, e, silent);
     } finally {
       pending.delete(key);
     }
   })();
   pending.set(key, job);
   return job;
+}
+
+function failOpen(path: string, e: unknown, silent: boolean): void {
+  console.error(e);
+  // A file that's gone has no business in the recent list.
+  const gone = appState.recent.filter((p) => p.toLowerCase() !== path.toLowerCase());
+  if (gone.length !== appState.recent.length) { appState.recent = gone; saveState(); }
+  if (!silent) notify(`Couldn't open ${baseName(path)}: ${errText(e)}`, 'error');
 }
 
 export async function openPaths(paths: string[]): Promise<void> {
@@ -369,7 +375,7 @@ export async function boot(): Promise<void> {
     await openPaths(fromArgs);
   } else if (settings.startup === 'restore') {
     const s = { ...appState.session };
-    for (const p of s.paths) await openPath(p).catch(() => {});
+    for (const p of s.paths) await openPath(p, true);
     const a = store.tabs.find((t) => t.path === s.active);
     if (a) activate(a);
   }

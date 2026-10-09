@@ -183,8 +183,6 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 #status .grow { flex: 1; }
 
 /* ---------- update notice ---------- */
-#st-flash { color: var(--fg); }
-#st-flash.err { color: var(--syn-tag); }
 #st-ro { padding: 0 6px; height: 18px; border: 0; border-radius: 4px; background: none; color: var(--fg-faint); font: inherit; cursor: default; }
 #st-ro:hover { background: var(--surface); color: var(--fg-dim); }
 #st-update { padding: 0 6px; height: 18px; border: 0; border-radius: 4px; background: none; color: var(--accent); font: inherit; cursor: pointer; }
@@ -219,3 +217,11 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 .dlg-actions button.danger { color: var(--syn-tag); }
 .dlg-actions button.danger:focus-visible, .dlg-actions button.danger:hover { border-color: var(--syn-tag); }
 .dlg-actions button.primary.danger { background: var(--syn-tag); border-color: var(--syn-tag); color: var(--bg); }
+
+/* ---------- transient notes (bottom-left) ---------- */
+#notes { position: fixed; left: 14px; bottom: 36px; z-index: 40; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 28px)); pointer-events: none; }
+.note { display: flex; align-items: flex-start; gap: 10px; padding: 9px 8px 9px 12px; background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 28px rgb(0 0 0 / 0.28); font: 12.5px/1.45 var(--ui); pointer-events: auto; overflow-wrap: anywhere; }
+.note.err { border-color: color-mix(in srgb, var(--syn-tag) 55%, var(--border)); }
+.note span { flex: 1; }
+.note button { width: 20px; height: 20px; padding: 0; flex: none; border: 0; border-radius: 4px; background: none; color: var(--fg-dim); font-size: 16px; line-height: 1; cursor: pointer; }
+.note button:hover { background: var(--bg); color: var(--fg); }

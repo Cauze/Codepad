@@ -7,7 +7,6 @@
 <footer id="status">
   <span id="st-pos">{status.pos}</span>
   <span id="st-lines">{status.lines}</span>
-  {#if status.flash}<span id="st-flash" class:err={status.flashErr} role="status">{status.flash}</span>{/if}
   <span class="grow"></span>
   {#if upd.info && (upd.phase === 'available' || upd.phase === 'error') && !upd.toast}
     <button id="st-update" onclick={showUpdateNotice} title="A newer version of Codepad is available">↑ {upd.info.version} available</button>
