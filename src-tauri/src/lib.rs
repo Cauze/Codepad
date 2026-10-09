@@ -169,6 +169,47 @@ fn canon_new(p: &Path) -> String {
     }
 }
 
+/// An image file as a `data:` URL, for the Markdown preview (the webview can't load local files itself).
+#[tauri::command]
+fn read_image_data(path: String) -> Result<String, String> {
+    use base64::Engine;
+    const MAX_IMAGE: u64 = 15 * 1024 * 1024;
+    let p = Path::new(&path);
+    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "avif" => "image/avif",
+        _ => return Err("not an image".into()),
+    };
+    if fs::metadata(p).map_err(|e| e.to_string())?.len() > MAX_IMAGE {
+        return Err("image too large".into());
+    }
+    let bytes = fs::read(p).map_err(|e| e.to_string())?;
+    Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
+/// Opens a web or mail link from the Markdown preview in the default app. Nothing else is allowed through.
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    let lower = url.to_ascii_lowercase();
+    if !(lower.starts_with("https://") || lower.starts_with("http://") || lower.starts_with("mailto:")) {
+        return Err("unsupported link".into());
+    }
+    #[cfg(windows)]
+    let mut cmd = std::process::Command::new("explorer");
+    #[cfg(target_os = "macos")]
+    let mut cmd = std::process::Command::new("open");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut cmd = std::process::Command::new("xdg-open");
+    cmd.arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn file_mtime(path: String) -> Result<u64, String> {
     mtime_ms(Path::new(&path))
@@ -278,7 +319,7 @@ pub fn run() {
             std::thread::spawn(update::cleanup);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, write_file, save_dialog, file_mtime, initial_files,
+        .invoke_handler(tauri::generate_handler![read_file, write_file, save_dialog, read_image_data, open_external, file_mtime, initial_files,
             canonical_path,
             read_config,
             write_config,

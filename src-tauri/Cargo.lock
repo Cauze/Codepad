@@ -482,6 +482,7 @@ dependencies = [
 name = "codepad"
 version = "0.3.1"
 dependencies = [
+ "base64 0.22.1",
  "encoding_rs",
  "serde",
  "serde_json",
