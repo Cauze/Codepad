@@ -15,6 +15,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the release notes are built from the commit history
 
       - name: Check the tag matches the app version
         shell: bash
@@ -69,6 +71,25 @@ jobs:
         shell: bash
         run: cp src-tauri/target/release/bundle/nsis/*-setup.exe release/
 
+      - name: Write release notes
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Commit subjects since the previous tag (all of them for the first release); "Release x.y.z" commits are left out
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)
+          range="${prev:+$prev..}$TAG"
+          {
+            echo "## What's changed"
+            echo
+            git log "$range" --no-merges --reverse --pretty='- %s' --grep='^Release [0-9v]' --invert-grep
+            if [ -n "$prev" ]; then
+              echo
+              echo "**Full changelog**: https://github.com/${{ github.repository }}/compare/$prev...$TAG"
+            fi
+          } > release-notes.md
+          cat release-notes.md
+
       - name: Publish release
         shell: bash
         env:
@@ -76,7 +97,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           ls -l release
-          flags=--generate-notes
+          flags="--notes-file release-notes.md"
           # v1.2.3-beta.1 and the like are marked as pre-releases
           [[ "$TAG" == *-* ]] && flags="$flags --prerelease"
           gh release create "$TAG" release/* --title "Codepad ${TAG#v}" $flags
