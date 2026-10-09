@@ -8,6 +8,7 @@ import * as editor from './editor';
 import { appState, loadConfig, meta, pollSettings, saveState, settings } from './config.svelte';
 import { showDialog } from './dialog.svelte';
 import { errText, notify } from './notify.svelte';
+import { restoreWindow, trackWindow } from './windowState';
 import { hooks, initUpdates } from './update.svelte';
 
 interface FileData {
@@ -396,6 +397,8 @@ export async function boot(): Promise<void> {
     if (e.payload.type === 'drop') void openPaths(e.payload.paths);
   });
   void listen<string[]>('open-files', (e) => openPaths(e.payload));
+  await restoreWindow();
   await win.show();
+  void trackWindow();
   void initUpdates();
 }

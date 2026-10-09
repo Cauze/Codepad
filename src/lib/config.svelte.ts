@@ -46,6 +46,8 @@ export interface AppState {
   recent: string[];
   /** Version whose update notice was dismissed, so it isn't shown again at every launch. */
   dismissedUpdate: string | null;
+  /** Last window bounds in physical pixels; max = it was maximized (x/y/w/h are then the un-maximized bounds). */
+  window: { x: number; y: number; w: number; h: number; max: boolean } | null;
 }
 
 interface ConfigFile {
@@ -74,7 +76,7 @@ export const DEFAULTS: Readonly<Settings> = Object.freeze({
 
 /** Reactive: components and effects that read these re-run when they change. */
 export const settings: Settings = $state({ ...DEFAULTS });
-export const appState: AppState = $state({ session: { paths: [], active: null }, recent: [], dismissedUpdate: null });
+export const appState: AppState = $state({ session: { paths: [], active: null }, recent: [], dismissedUpdate: null, window: null });
 export const meta = { settingsPath: '' };
 
 let settingsMtime = 0;
@@ -129,6 +131,11 @@ export async function loadConfig(): Promise<void> {
     const strings = (a: unknown): string[] => (Array.isArray(a) ? a.filter((p): p is string => typeof p === 'string') : []);
     appState.recent = strings(j.recent).slice(0, 8);
     appState.dismissedUpdate = typeof j.dismissedUpdate === 'string' ? j.dismissedUpdate : null;
+    const w = j.window;
+    const int = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+    appState.window = w && int(w.x) && int(w.y) && int(w.w) && int(w.h) && w.w >= 300 && w.h >= 200
+      ? { x: Math.round(w.x), y: Math.round(w.y), w: Math.round(w.w), h: Math.round(w.h), max: w.max === true }
+      : null;
     appState.session = {
       paths: strings(j.session?.paths),
       active: typeof j.session?.active === 'string' ? j.session.active : null,
