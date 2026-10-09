@@ -11,3 +11,14 @@
 !macro NSIS_HOOK_PREUNINSTALL
   DeleteRegKey SHCTX "Software\Classes\*\shell\Codepad"
 !macroend
+
+; Uninstalling forgets the install folder, so the next install suggests the default again.
+; (Updates keep it, so a custom folder survives them. Tauri's own cleanup only runs when
+; "delete app data" is ticked.)
+!macro NSIS_HOOK_POSTUNINSTALL
+  ${If} $UpdateMode <> 1
+    DeleteRegValue SHCTX "${MANUPRODUCTKEY}" ""
+    DeleteRegKey /ifempty SHCTX "${MANUPRODUCTKEY}"
+    DeleteRegKey /ifempty SHCTX "${MANUKEY}"
+  ${EndIf}
+!macroend
