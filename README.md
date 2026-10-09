@@ -158,6 +158,17 @@ The frontend is Svelte 5 and TypeScript, bundled with Vite. The backend is a sma
 
 Pushing a tag like `v0.2.0` runs the release workflow, which builds both Windows files and publishes them to a GitHub release. The tag has to match the version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`. The release notes are generated from the commit messages since the previous tag, so keep the first line of each commit readable.
 
+## Tests
+
+```bash
+npm run check                        # type-check the frontend
+npm test                             # Rust unit tests
+npm run test:e2e                     # end-to-end tests against the built exe
+npm run test:e2e -- find encodings   # only the files whose name contains one of these words
+```
+
+The end-to-end tests live in `tests/e2e`, one file per feature. Each one starts the real exe, drives it over WebView2's DevTools port (no mouse or keyboard takeover, so you can keep working), and checks what the app does. Build the exe first with `npx tauri build --no-bundle`, or point `CODEPAD_EXE` at another build, and close Codepad before running them, because the app is single-instance. The tests swap in their own settings and put yours back afterwards. `command-line` and `explorer-menu` change your PATH and right-click menu, so they skip themselves if you already have those switched on.
+
 ## License
 
 [MIT](LICENSE)
