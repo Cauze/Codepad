@@ -57,7 +57,7 @@ function buildRegex(): RegExp | null {
       ts.error = '';
       return re;
     } catch (e) {
-      ts.error = e instanceof Error ? e.message.replace(/^Invalid regular expression: /, '').replace(/^/.*/[a-z]*: /, '') : 'Invalid regular expression';
+      ts.error = e instanceof Error ? e.message.replace(/^Invalid regular expression: /, '').replace(/^\/.*\/[a-z]*: /, '') : 'Invalid regular expression';
       return null;
     }
   }

@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { MINIMAP_DEFAULTS, type MinimapOptions } from './minimap';
 
 /*
  * Two files live in %APPDATA%\Codepad:
@@ -42,6 +43,8 @@ export interface Settings {
   lineHeight: number;
   wordWrap: boolean;
   lineNumbers: boolean;
+  /** Code overview beside the editor; same options as VS Code's editor.minimap.* (off by default). */
+  minimap: MinimapOptions;
 }
 
 export interface AppState {
@@ -76,6 +79,7 @@ export const DEFAULTS: Readonly<Settings> = Object.freeze({
   lineHeight: 1.6,
   wordWrap: false,
   lineNumbers: true,
+  minimap: { ...MINIMAP_DEFAULTS },
 });
 
 /** Reactive: components and effects that read these re-run when they change. */
@@ -106,6 +110,23 @@ function sanitize(raw: unknown): Settings {
     lineHeight: num(o.lineHeight, 1, 3, DEFAULTS.lineHeight),
     wordWrap: typeof o.wordWrap === 'boolean' ? o.wordWrap : DEFAULTS.wordWrap,
     lineNumbers: typeof o.lineNumbers === 'boolean' ? o.lineNumbers : DEFAULTS.lineNumbers,
+    minimap: sanitizeMinimap(o.minimap),
+  };
+}
+
+function sanitizeMinimap(raw: unknown): MinimapOptions {
+  const m = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const d = MINIMAP_DEFAULTS;
+  const num = (v: unknown, lo: number, hi: number, dflt: number) =>
+    typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt;
+  return {
+    enabled: typeof m.enabled === 'boolean' ? m.enabled : d.enabled,
+    side: m.side === 'left' || m.side === 'right' ? m.side : d.side,
+    showSlider: m.showSlider === 'always' || m.showSlider === 'mouseover' ? m.showSlider : d.showSlider,
+    renderCharacters: typeof m.renderCharacters === 'boolean' ? m.renderCharacters : d.renderCharacters,
+    maxColumn: Math.round(num(m.maxColumn, 1, 500, d.maxColumn)),
+    scale: Math.round(num(m.scale, 1, 3, d.scale)),
+    size: m.size === 'proportional' || m.size === 'fill' || m.size === 'fit' ? m.size : d.size,
   };
 }
 
@@ -168,6 +189,11 @@ export const saveState = debounced(() => {
 export function changeSetting<K extends keyof Settings>(key: K, value: Settings[K]): void {
   if (settings[key] === value) return;
   settings[key] = value;
+  saveSettings();
+}
+
+export function changeMinimap(patch: Partial<MinimapOptions>): void {
+  settings.minimap = { ...settings.minimap, ...patch };
   saveSettings();
 }
 

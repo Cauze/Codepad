@@ -249,3 +249,12 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 #ts-list .ln { flex: none; min-width: 3.5ch; text-align: right; color: var(--fg-faint); }
 #ts-list .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
 #ts-list mark { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--fg); border-radius: 2px; }
+
+/* ---------- minimap ---------- */
+.cm-minimap { position: absolute; z-index: 4; overflow: hidden; background: var(--bg); touch-action: none; user-select: none; cursor: default; }
+.cm-minimap.side-right { right: 0; border-left: 1px solid var(--border); }
+.cm-minimap.side-left { left: 0; border-right: 1px solid var(--border); }
+.cm-minimap canvas { display: block; }
+.cm-minimap-slider { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--fg) 14%, transparent); opacity: 0; transition: opacity .12s; pointer-events: auto; cursor: grab; }
+.cm-minimap:hover .cm-minimap-slider, .cm-minimap.slider-always .cm-minimap-slider { opacity: 1; }
+.cm-minimap-slider:active { cursor: grabbing; background: color-mix(in srgb, var(--fg) 22%, transparent); }

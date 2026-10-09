@@ -8,6 +8,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { tags as t } from '@lezer/highlight';
 import { settings } from './config.svelte';
 import { createFindPanel, openReplace } from './findPanel';
+import { minimapExtension } from './minimap';
 
 /*
  * The CodeMirror side. One EditorView is shared by all tabs; each tab keeps its own EditorState
@@ -54,9 +55,11 @@ const highlight = HighlightStyle.define([
 
 /* ---------- settings-driven pieces live in compartments so they can be swapped per tab ---------- */
 const langComp = new Compartment();
+const miniComp = new Compartment();
 const wrapComp = new Compartment();
 const numbersComp = new Compartment();
 const wrapExt = (): Extension => (settings.wordWrap ? EditorView.lineWrapping : []);
+const miniExt = (): Extension => minimapExtension({ ...settings.minimap }, highlight);
 const numbersExt = (): Extension => (settings.lineNumbers ? [lineNumbers(), highlightActiveLineGutter()] : []);
 /** Editing needs the setting on AND a file we can write back faithfully (not binary, too large, or non-UTF-8). */
 const editComp = new Compartment();
@@ -66,6 +69,7 @@ const editExt = (mode: EditMode): Extension => EditorState.readOnly.of(!(mode ==
 const settingEffects = (mode: EditMode) => [
   wrapComp.reconfigure(wrapExt()),
   numbersComp.reconfigure(numbersExt()),
+  miniComp.reconfigure(miniExt()),
   editComp.reconfigure(editExt(mode)),
 ];
 
@@ -107,6 +111,7 @@ export function makeState(doc: string, lang: Lang, mode: EditMode): EditorState 
       closeBrackets(),
       indentOnInput(),
       numbersComp.of(numbersExt()),
+      miniComp.of(miniExt()),
       wrapComp.of(wrapExt()),
       foldGutter({ openText: '⌄', closedText: '›' }),
       highlightActiveLine(),

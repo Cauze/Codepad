@@ -52,6 +52,7 @@
     void settings.wordWrap;
     void settings.lineNumbers;
     void settings.editable;
+    void settings.minimap;
     untrack(applyEditorSettings);
   });
 

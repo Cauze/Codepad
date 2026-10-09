@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { DEFAULTS, changeSetting, meta, setFontSize, settings, type AutoSave, type CursorStyle, type Startup, type Theme } from './config.svelte';
+import { DEFAULTS, changeMinimap, changeSetting, meta, setFontSize, settings, type AutoSave, type CursorStyle, type Startup, type Theme } from './config.svelte';
 import * as editor from './editor';
 import { ask, closePalette, openList, pal, pick, type Item } from './palette.svelte';
 import { checkForUpdates, installUpdate, upd } from './update.svelte';
@@ -164,6 +164,12 @@ export const commands: Command[] = [
   { title: 'Reset Zoom', keys: 'Ctrl+0', when: () => settings.fontSize !== DEFAULTS.fontSize, run: () => setFontSize(DEFAULTS.fontSize) },
   { title: 'Toggle Word Wrap', keys: 'Alt+Z', run: () => changeSetting('wordWrap', !settings.wordWrap) },
   { title: 'Toggle Line Numbers', run: () => changeSetting('lineNumbers', !settings.lineNumbers) },
+  { title: 'Toggle Minimap', run: () => changeMinimap({ enabled: !settings.minimap.enabled }) },
+  { title: 'Minimap: Show on Left', when: () => settings.minimap.side !== 'left', run: () => changeMinimap({ side: 'left' }) },
+  { title: 'Minimap: Show on Right', when: () => settings.minimap.side !== 'right', run: () => changeMinimap({ side: 'right' }) },
+  { title: 'Minimap: Always Show Slider', when: () => settings.minimap.showSlider !== 'always', run: () => changeMinimap({ showSlider: 'always' }) },
+  { title: 'Minimap: Show Slider on Hover', when: () => settings.minimap.showSlider !== 'mouseover', run: () => changeMinimap({ showSlider: 'mouseover' }) },
+  { title: 'Toggle Minimap Characters', run: () => changeMinimap({ renderCharacters: !settings.minimap.renderCharacters }) },
   cursor('line', 'Line'),
   cursor('block', 'Block'),
   cursor('underline', 'Underline'),
