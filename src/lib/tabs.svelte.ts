@@ -38,6 +38,8 @@ export class Tab {
   /** Full path; for a not-yet-saved file just a unique placeholder. */
   path = $state('');
   name = $state('');
+  /** Has text to search (not a binary / too-large placeholder). */
+  searchable = false;
   /** Made with New File and not saved anywhere yet. */
   untitled = $state(false);
   /** Created in Codepad: stays editable whatever the `editable` setting says. */
@@ -79,6 +81,7 @@ export class Tab {
     tb.untitled = true;
     tb.created = true;
     tb.writable = true;
+    tb.searchable = true;
     tb.crlf = crlf;
     tb.savedFormat = { encoding: 'UTF-8', bom: false, crlf };
     tb.state = state;
@@ -91,6 +94,7 @@ export class Tab {
     this.mtime = data.mtime;
     this.lang = lang;
     this.writable = data.content != null && !data.lossy;
+    this.searchable = data.content != null;
     this.encoding = data.encoding;
     this.bom = data.bom;
     this.crlf = data.crlf;
@@ -190,6 +194,8 @@ export function applyEditorSettings(): void {
 
 /* ---------- saving ---------- */
 const docOf = (tb: Tab): Text => (tb === store.active ? editor.currentState() : tb.state).doc;
+/** The tab's current text, including unsaved edits. */
+export const tabDoc = docOf;
 
 const saving = new Map<Tab, Promise<boolean>>(); // per-tab queue, so two saves never write at once
 const autoTimers = new Map<Tab, ReturnType<typeof setTimeout>>();

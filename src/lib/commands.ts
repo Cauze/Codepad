@@ -6,6 +6,7 @@ import { ask, closePalette, openList, pal, pick, type Item } from './palette.sve
 import { checkForUpdates, installUpdate, upd } from './update.svelte';
 import { activate, canEdit, closeAll, closeAllExcept, closeTab, cycle, newFile, openPath, pickFiles, reopenWithEncoding, revertTab, saveAll, saveTab, saveTabAs, saveWithEncoding, setLineEnding, store } from './tabs.svelte';
 import { ENCODINGS, encodingLabel } from './encodings';
+import { openSearch } from './searchTabs.svelte';
 
 export interface Command extends Item {
   /** Hidden from the palette while this returns false. */
@@ -120,6 +121,7 @@ export const commands: Command[] = [
   { title: 'Open File…', keys: 'Ctrl+O', run: () => void pickFiles() },
   { title: 'Switch Tab…', keys: 'Ctrl+P', when: hasTab, run: () => void switchTab() },
   { title: 'Go to Line…', keys: 'Ctrl+G', when: hasTab, run: () => void gotoLine() },
+  { title: 'Search in Open Files…', keys: 'Ctrl+Shift+F', when: hasTab, run: openSearch },
   { title: 'Next Tab', keys: 'Ctrl+Tab', when: manyTabs, run: () => cycle(1) },
   { title: 'Previous Tab', keys: 'Ctrl+Shift+Tab', when: manyTabs, run: () => cycle(-1) },
 

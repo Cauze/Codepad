@@ -7,6 +7,7 @@
   import Dialog from './Dialog.svelte';
   import Notes from './Notes.svelte';
   import Palette from './Palette.svelte';
+  import SearchTabs from './SearchTabs.svelte';
   import StatusBar from './StatusBar.svelte';
   import TitleBar from './TitleBar.svelte';
   import UpdateNotice from './UpdateNotice.svelte';
@@ -86,6 +87,7 @@
 
 <StatusBar />
 <Palette />
+<SearchTabs />
 <Dialog />
 <Notes />
 <UpdateNotice />

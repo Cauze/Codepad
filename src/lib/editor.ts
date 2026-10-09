@@ -175,6 +175,25 @@ export const reconfigureActive = (mode: EditMode): void => view?.dispatch({ effe
 
 export const lineCount = (): number => v().state.doc.lines;
 
+/** The selected text if it's a single non-empty line, e.g. to seed a search. */
+export function selectedText(): string {
+  const st = view?.state;
+  if (!st) return '';
+  const { from, to } = st.selection.main;
+  if (from === to || to - from > 200) return '';
+  const text = st.sliceDoc(from, to);
+  return text.includes('\n') ? '' : text;
+}
+
+/** Select a range and bring it to the middle of the screen. */
+export function selectRange(from: number, to: number): void {
+  const e = v();
+  const len = e.state.doc.length;
+  const a = Math.min(from, len), b = Math.min(to, len);
+  e.dispatch({ selection: { anchor: a, head: b }, effects: EditorView.scrollIntoView(a, { y: 'center' }) });
+  e.focus();
+}
+
 export function goTo(line: number, col: number): void {
   const e = v();
   const total = e.state.doc.lines;
