@@ -4,7 +4,8 @@ import { DEFAULTS, changeSetting, meta, setFontSize, settings, type AutoSave, ty
 import * as editor from './editor';
 import { ask, closePalette, openList, pal, pick, type Item } from './palette.svelte';
 import { checkForUpdates, installUpdate, upd } from './update.svelte';
-import { activate, closeAll, closeAllExcept, closeTab, cycle, openPath, pickFiles, revertTab, saveAll, saveTab, store } from './tabs.svelte';
+import { activate, canEdit, closeAll, closeAllExcept, closeTab, cycle, openPath, pickFiles, reopenWithEncoding, revertTab, saveAll, saveTab, saveWithEncoding, setLineEnding, store } from './tabs.svelte';
+import { ENCODINGS, encodingLabel } from './encodings';
 
 export interface Command extends Item {
   /** Hidden from the palette while this returns false. */
@@ -41,6 +42,35 @@ export async function gotoLine(): Promise<void> {
           : `File has ${total.toLocaleString()} lines`,
   });
   if (target) editor.goTo(target.line, target.col);
+}
+
+/** Encoding picker. `how` is "reopen" (re-read the file as…) or "save" (write it out as…). */
+export async function chooseEncoding(how: 'reopen' | 'save'): Promise<void> {
+  const tb = store.active;
+  if (!tb) return;
+  const cur = encodingLabel(tb.encoding, tb.bom);
+  const opt = await pick({
+    placeholder: how === 'reopen' ? 'Reopen with encoding…' : 'Save with encoding…',
+    items: ENCODINGS.map((e) => ({ title: e.label, detail: e.label === cur ? 'current' : e.id, value: e })),
+    selected: Math.max(0, ENCODINGS.findIndex((e) => e.label === cur)),
+  });
+  if (!opt) return;
+  if (how === 'reopen') await reopenWithEncoding(tb, opt);
+  else await saveWithEncoding(tb, opt);
+}
+
+/** What the status bar's encoding button does: ask which of the two, then which encoding. */
+export async function encodingMenu(): Promise<void> {
+  const tb = store.active;
+  if (!tb) return;
+  const how = await pick({
+    placeholder: `Encoding: ${encodingLabel(tb.encoding, tb.bom)}`,
+    items: [
+      { title: 'Reopen with Encoding…', detail: 'Read the file again, decoded differently', value: 'reopen' as const },
+      ...(canEdit(tb) ? [{ title: 'Save with Encoding…', detail: 'Write the file out in another encoding', value: 'save' as const }] : []),
+    ],
+  });
+  if (how) await chooseEncoding(how);
 }
 
 async function copyText(text: string): Promise<void> {
@@ -95,6 +125,19 @@ export const commands: Command[] = [
   { title: 'Save', keys: 'Ctrl+S', when: () => !!store.active?.dirty, run: () => store.active && void saveTab(store.active) },
   { title: 'Save All', keys: 'Ctrl+Shift+S', when: () => store.tabs.some((t) => t.dirty), run: () => void saveAll() },
   { title: 'Revert File', when: () => !!store.active && (store.active.dirty || store.active.stale), run: () => store.active && void revertTab(store.active) },
+
+  {
+    title: 'Line Endings: LF',
+    when: () => !!store.active && canEdit(store.active) && store.active.crlf,
+    run: () => store.active && setLineEnding(store.active, false),
+  },
+  {
+    title: 'Line Endings: CRLF',
+    when: () => !!store.active && canEdit(store.active) && !store.active.crlf,
+    run: () => store.active && setLineEnding(store.active, true),
+  },
+  { title: 'Reopen with Encoding…', when: hasTab, run: () => void chooseEncoding('reopen') },
+  { title: 'Save with Encoding…', when: () => !!store.active && canEdit(store.active), run: () => void chooseEncoding('save') },
 
   { title: 'Close Current File', keys: 'Ctrl+W', when: hasTab, run: () => store.active && void closeTab(store.active) },
   { title: 'Close Other Tabs', when: manyTabs, run: () => store.active && void closeAllExcept([store.active]) },

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { changeSetting, settings } from './lib/config.svelte';
-  import { canEdit, status, store } from './lib/tabs.svelte';
+  import { canEdit, setLineEnding, status, store } from './lib/tabs.svelte';
+  import { encodingMenu } from './lib/commands';
+  import { encodingLabel } from './lib/encodings';
   import { showUpdateNotice, upd } from './lib/update.svelte';
 </script>
 
@@ -14,11 +16,21 @@
   {#if store.active && !canEdit(store.active)}
     <button
       id="st-ro"
-      title={settings.editable ? "This file can't be edited (binary, too large, or not UTF-8)" : 'Editing is off. Click to turn it on.'}
+      title={settings.editable ? "This file can't be edited (binary, too large, or not cleanly decodable)" : 'Editing is off. Click to turn it on.'}
       onclick={() => { if (!settings.editable) changeSetting('editable', true); }}
     >Read-only</button>
   {/if}
   <span id="st-lang">{store.active?.lang ?? ''}</span>
-  {#if store.active?.writable}<span id="st-eol">{store.active.crlf ? 'CRLF' : 'LF'}</span>{/if}
-  <span id="st-enc">UTF-8</span>
+  {#if store.active?.writable}
+    <button
+      id="st-eol"
+      class="st-btn"
+      disabled={!canEdit(store.active)}
+      title={canEdit(store.active) ? `Line endings: click to switch to ${store.active.crlf ? 'LF' : 'CRLF'}` : 'Line endings'}
+      onclick={() => store.active && setLineEnding(store.active, !store.active.crlf)}
+    >{store.active.crlf ? 'CRLF' : 'LF'}</button>
+  {/if}
+  {#if store.active && !store.active.missing}
+    <button id="st-enc" class="st-btn" title="Encoding: click to reopen or save with another" onclick={() => void encodingMenu()}>{encodingLabel(store.active.encoding, store.active.bom)}</button>
+  {/if}
 </footer>

@@ -1,5 +1,6 @@
 mod update;
 
+use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8, WINDOWS_1252};
 use serde::Serialize;
 use std::{fs, path::Path, time::UNIX_EPOCH};
 use tauri::{Emitter, Manager};
@@ -13,17 +14,19 @@ struct FileData {
     content: Option<String>,
     /// Shown in place of the content when the file can't be displayed.
     note: Option<String>,
-    /// The file started with a UTF-8 byte-order mark (stripped from `content`; written back on save).
+    /// How the bytes were decoded (an encoding_rs name such as "UTF-8", "UTF-16LE", "windows-1252").
+    encoding: String,
+    /// The file started with a byte-order mark (stripped from `content`; written back on save).
     bom: bool,
     /// Most line breaks are CRLF (the editor works in LF; this is how to write them back).
     crlf: bool,
-    /// Not valid UTF-8, so `content` has replacement characters and must not be saved over the file.
+    /// Some bytes weren't valid in `encoding`, so `content` has replacement characters and must not be saved over the file.
     lossy: bool,
 }
 
 impl FileData {
     fn note(path: String, mtime: u64, note: String) -> Self {
-        FileData { path, mtime, content: None, note: Some(note), bom: false, crlf: false, lossy: false }
+        FileData { path, mtime, content: None, note: Some(note), encoding: "UTF-8".into(), bom: false, crlf: false, lossy: false }
     }
 }
 
@@ -52,8 +55,15 @@ fn canonical_path(path: String) -> String {
     canon(Path::new(&path))
 }
 
+fn lookup_encoding(label: &str) -> Result<&'static Encoding, String> {
+    Encoding::for_label(label.as_bytes()).ok_or_else(|| format!("Unknown encoding: {label}"))
+}
+
+/// Reads a file as text. Without `encoding` the encoding is detected: a byte-order mark wins, then valid
+/// UTF-8, and anything else is taken to be Windows-1252 (which decodes any byte). With `encoding` that
+/// encoding is used as given ("Reopen with Encoding").
 #[tauri::command]
-fn read_file(path: String) -> Result<FileData, String> {
+fn read_file(path: String, encoding: Option<String>) -> Result<FileData, String> {
     let p = Path::new(&path);
     let size = fs::metadata(p).map_err(|e| e.to_string())?.len();
     let mtime = mtime_ms(p)?;
@@ -64,36 +74,73 @@ fn read_file(path: String) -> Result<FileData, String> {
     }
 
     let bytes = fs::read(p).map_err(|e| e.to_string())?;
-    if bytes.iter().take(8192).any(|&b| b == 0) {
+    let forced = encoding.as_deref().map(lookup_encoding).transpose()?;
+    let sniffed = Encoding::for_bom(&bytes);
+    if forced.is_none() && sniffed.is_none() && bytes.iter().take(8192).any(|&b| b == 0) {
         return Ok(FileData::note(path, mtime, "Binary file — not shown.".into()));
     }
-    let bom = bytes.starts_with(&[0xEF, 0xBB, 0xBF]);
-    let body = if bom { &bytes[3..] } else { &bytes[..] };
-    let (content, lossy) = match std::str::from_utf8(body) {
-        Ok(s) => (s.to_owned(), false),
-        Err(_) => (String::from_utf8_lossy(body).into_owned(), true),
+
+    let (enc, bom_len, lossy_ok) = match (forced, sniffed) {
+        (Some(e), Some((s, n))) if s == e => (e, n, true),
+        (Some(e), _) => (e, 0, true),
+        (None, Some((s, n))) => (s, n, true),
+        (None, None) => (UTF_8, 0, false),
+    };
+    let body = &bytes[bom_len..];
+    let (content, enc, lossy) = if lossy_ok {
+        let (c, had_errors) = enc.decode_without_bom_handling(body);
+        (c.into_owned(), enc, had_errors)
+    } else {
+        match UTF_8.decode_without_bom_handling_and_without_replacement(body) {
+            Some(c) => (c.into_owned(), UTF_8, false),
+            None => (WINDOWS_1252.decode_without_bom_handling(body).0.into_owned(), WINDOWS_1252, false),
+        }
     };
     let crlf_n = content.matches("\r\n").count();
     let lf_n = content.matches('\n').count() - crlf_n;
-    Ok(FileData { path, mtime, content: Some(content), note: None, bom, crlf: crlf_n > lf_n, lossy })
+    Ok(FileData { path, mtime, content: Some(content), note: None, encoding: enc.name().into(), bom: bom_len > 0, crlf: crlf_n > lf_n, lossy })
+}
+
+/// UTF-16 has no encoder in encoding_rs (the web platform never writes it), so do it by hand.
+fn encode_text(content: &str, enc: &'static Encoding, bom: bool) -> Result<Vec<u8>, String> {
+    let mut out = Vec::with_capacity(content.len() + 3);
+    if enc == UTF_16LE || enc == UTF_16BE {
+        let le = enc == UTF_16LE;
+        let unit = |u: u16| if le { u.to_le_bytes() } else { u.to_be_bytes() };
+        if bom {
+            out.extend_from_slice(&unit(0xFEFF));
+        }
+        for u in content.encode_utf16() {
+            out.extend_from_slice(&unit(u));
+        }
+        return Ok(out);
+    }
+    if bom && enc == UTF_8 {
+        out.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
+    }
+    let (bytes, _, had_errors) = enc.encode(content);
+    if had_errors {
+        // Name the first character that doesn't fit, so the message is actionable.
+        let bad = content.chars().find(|c| enc.encode(c.encode_utf8(&mut [0; 4])).2).unwrap_or('?');
+        return Err(format!("UNMAPPABLE:{bad}"));
+    }
+    out.extend_from_slice(&bytes);
+    Ok(out)
 }
 
 /// Saves `content` over `path` (recreating it if it was deleted). When `expected_mtime` is given and the
 /// file on disk has a different modification time, nothing is written and the error is `CONFLICT`, so
-/// the UI can ask before overwriting someone else's change. Returns the new mtime.
+/// the UI can ask before overwriting someone else's change. A character that `encoding` can't represent
+/// gives `UNMAPPABLE:<char>` and nothing is written. Returns the new mtime.
 #[tauri::command]
-fn write_file(path: String, content: String, bom: bool, expected_mtime: Option<u64>) -> Result<u64, String> {
+fn write_file(path: String, content: String, encoding: String, bom: bool, expected_mtime: Option<u64>) -> Result<u64, String> {
     let p = Path::new(&path);
     if let (Some(want), Ok(now)) = (expected_mtime, mtime_ms(p)) {
         if now != want {
             return Err("CONFLICT".into());
         }
     }
-    let mut bytes = Vec::with_capacity(content.len() + 3);
-    if bom {
-        bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
-    }
-    bytes.extend_from_slice(content.as_bytes());
+    let bytes = encode_text(&content, lookup_encoding(&encoding)?, bom)?;
     fs::write(p, bytes).map_err(|e| e.to_string())?;
     mtime_ms(p)
 }
@@ -129,7 +176,7 @@ fn read_config(app: tauri::AppHandle, name: String) -> Result<ConfigFile, String
     Ok(ConfigFile {
         content: fs::read_to_string(&p).ok(),
         mtime: mtime_ms(&p).unwrap_or(0),
-        path: p.to_string_lossy().into_owned(),
+        path: canon(&p), // same spelling an opened tab gets, so settings.json is recognised even behind a link
     })
 }
 
@@ -218,4 +265,33 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Codepad");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn utf16_roundtrips_with_bom() {
+        let bytes = encode_text("héllo\r\n€", UTF_16LE, true).unwrap();
+        assert_eq!(&bytes[..2], &[0xFF, 0xFE]);
+        let (enc, n) = Encoding::for_bom(&bytes).unwrap();
+        assert_eq!(enc, UTF_16LE);
+        assert_eq!(enc.decode_without_bom_handling(&bytes[n..]).0, "héllo\r\n€");
+        let be = encode_text("a", UTF_16BE, true).unwrap();
+        assert_eq!(be, vec![0xFE, 0xFF, 0x00, b'a']);
+    }
+
+    #[test]
+    fn unmappable_character_is_named() {
+        assert_eq!(encode_text("price: €5", WINDOWS_1252, false).unwrap(), b"price: \x805");
+        let err = encode_text("snow ☃", WINDOWS_1252, false).unwrap_err();
+        assert_eq!(err, "UNMAPPABLE:☃");
+    }
+
+    #[test]
+    fn utf8_bom_is_optional() {
+        assert_eq!(encode_text("a", UTF_8, true).unwrap(), vec![0xEF, 0xBB, 0xBF, b'a']);
+        assert_eq!(encode_text("a", UTF_8, false).unwrap(), vec![b'a']);
+    }
 }

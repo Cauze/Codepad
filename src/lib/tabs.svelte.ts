@@ -9,6 +9,7 @@ import { appState, loadConfig, meta, pollSettings, saveState, settings } from '.
 import { showDialog } from './dialog.svelte';
 import { errText, notify } from './notify.svelte';
 import { restoreWindow, trackWindow } from './windowState';
+import { encodingLabel, type EncodingOption } from './encodings';
 import { hooks, initUpdates } from './update.svelte';
 
 interface FileData {
@@ -17,9 +18,10 @@ interface FileData {
   content: string | null;
   /** Shown in place of the content when the file can't be displayed. */
   note: string | null;
+  encoding: string;
   bom: boolean;
   crlf: boolean;
-  /** Not valid UTF-8: shown with replacement characters, so it must not be written back. */
+  /** Some bytes weren't valid in the encoding: shown with replacement characters, so it must not be written back. */
   lossy: boolean;
 }
 
@@ -45,10 +47,15 @@ export class Tab {
   dirty = $state(false);
   /** Changed on disk while this tab has unsaved edits; saving will ask before overwriting. */
   stale = $state(false);
-  /** Text we can write back faithfully (not binary, too large, or non-UTF-8). */
+  /** Text we can write back faithfully (not binary, too large, or undecodable). */
   writable = $state(false);
-  bom = false;
-  crlf = false;
+  /** encoding_rs name the file is read and written in. */
+  encoding = $state('UTF-8');
+  bom = $state(false);
+  /** Line endings written on save (the editor itself always holds LF). */
+  crlf = $state(false);
+  /** encoding / bom / crlf as last read from or written to disk, so changing them counts as an edit. */
+  savedFormat = { encoding: 'UTF-8', bom: false, crlf: false };
   /** The document as last read from / written to disk; `dirty` is whether the editor differs from it. */
   saved!: Text;
   /** Saved editor state; only current while this tab is NOT the one on screen. */
@@ -65,8 +72,10 @@ export class Tab {
     this.mtime = data.mtime;
     this.lang = lang;
     this.writable = data.content != null && !data.lossy;
+    this.encoding = data.encoding;
     this.bom = data.bom;
     this.crlf = data.crlf;
+    this.savedFormat = { encoding: data.encoding, bom: data.bom, crlf: data.crlf };
     this.state = state;
     this.saved = state.doc;
     this.dirty = false;
@@ -165,11 +174,18 @@ const docOf = (tb: Tab): Text => (tb === store.active ? editor.currentState() : 
 const saving = new Map<Tab, Promise<boolean>>(); // per-tab queue, so two saves never write at once
 const autoTimers = new Map<Tab, ReturnType<typeof setTimeout>>();
 
+const formatChanged = (tb: Tab): boolean =>
+  tb.encoding !== tb.savedFormat.encoding || tb.bom !== tb.savedFormat.bom || tb.crlf !== tb.savedFormat.crlf;
+
 /** Called by the editor on every document change: tracks the dirty flag and schedules auto-save. */
 export function onEdit(doc: Text): void {
   const tb = store.active;
   if (!tb) return;
-  tb.dirty = !doc.eq(tb.saved);
+  tb.dirty = !doc.eq(tb.saved) || formatChanged(tb);
+  scheduleAutoSave(tb);
+}
+
+function scheduleAutoSave(tb: Tab): void {
   clearTimeout(autoTimers.get(tb));
   if (tb.dirty && settings.autoSave === 'afterDelay') {
     autoTimers.set(tb, setTimeout(() => {
@@ -195,12 +211,14 @@ async function doSave(tb: Tab, { auto = false, force = false }): Promise<boolean
   if (!tb.writable) return false;
   const doc = docOf(tb);
   const text = tb.crlf ? doc.toString().replace(/\n/g, '\r\n') : doc.toString();
+  const format = { encoding: tb.encoding, bom: tb.bom, crlf: tb.crlf };
   try {
-    tb.mtime = await invoke<number>('write_file', { path: tb.path, content: text, bom: tb.bom, expectedMtime: force ? null : tb.mtime });
+    tb.mtime = await invoke<number>('write_file', { path: tb.path, content: text, encoding: format.encoding, bom: format.bom, expectedMtime: force ? null : tb.mtime });
     tb.saved = doc;
+    tb.savedFormat = format;
     tb.stale = false;
     tb.missing = false;
-    tb.dirty = !docOf(tb).eq(doc); // typing may have continued while the write was in flight
+    tb.dirty = !docOf(tb).eq(doc) || formatChanged(tb); // typing may have continued while the write was in flight
     return true;
   } catch (e) {
     if (e === 'CONFLICT') {
@@ -217,8 +235,12 @@ async function doSave(tb: Tab, { auto = false, force = false }): Promise<boolean
       });
       return pick === 'overwrite' ? doSave(tb, { auto, force: true }) : false;
     }
-    if (auto) { notify(`Couldn't save ${tb.name}: ${errText(e)}`, 'error'); return false; }
-    await showDialog({ title: `Couldn't save ${tb.name}`, message: errText(e), buttons: [{ label: 'OK', value: 'ok', primary: true }] });
+    const unmappable = typeof e === 'string' && e.startsWith('UNMAPPABLE:') ? e.slice('UNMAPPABLE:'.length) : null;
+    const why = unmappable
+      ? `The character "${unmappable}" can't be represented in ${encodingLabel(tb.encoding, tb.bom)}. Remove it or save with a different encoding (Ctrl+Shift+P, "Save with Encoding").`
+      : errText(e);
+    if (auto) { notify(`Couldn't save ${tb.name}: ${why}`, 'error'); return false; }
+    await showDialog({ title: `Couldn't save ${tb.name}`, message: why, buttons: [{ label: 'OK', value: 'ok', primary: true }] });
     return false;
   }
 }
@@ -268,16 +290,54 @@ export async function revertTab(tb: Tab): Promise<void> {
   try { await reloadTab(tb); } catch (e) { notify(`Couldn't reload ${tb.name}: ${errText(e)}`, 'error'); }
 }
 
+/* ---------- line endings & encoding ---------- */
+export function setLineEnding(tb: Tab, crlf: boolean): void {
+  if (!canEdit(tb) || tb.crlf === crlf) return;
+  tb.crlf = crlf;
+  tb.dirty = !docOf(tb).eq(tb.saved) || formatChanged(tb);
+  scheduleAutoSave(tb);
+}
+
+/** Re-read the file from disk, decoding it as `opt` (the user is saying the guess was wrong). */
+export async function reopenWithEncoding(tb: Tab, opt: EncodingOption): Promise<void> {
+  if (tb.dirty) {
+    if (tb !== store.active) activate(tb);
+    const pick = await showDialog({
+      title: `Discard changes to ${tb.name}?`,
+      message: `The file will be reloaded from disk as ${opt.label}.`,
+      buttons: [{ label: 'Cancel', value: 'cancel' }, { label: 'Discard Changes', value: 'discard', primary: true, danger: true }],
+    });
+    if (pick !== 'discard') return;
+  }
+  try {
+    await reloadTab(tb, opt.id);
+  } catch (e) { notify(`Couldn't reload ${tb.name}: ${errText(e)}`, 'error'); }
+}
+
+/** Write the file out in a different encoding. If that fails the tab keeps its old one. */
+export async function saveWithEncoding(tb: Tab, opt: EncodingOption): Promise<boolean> {
+  if (!canEdit(tb)) return false;
+  const prev = { encoding: tb.encoding, bom: tb.bom };
+  tb.encoding = opt.id;
+  tb.bom = opt.bom;
+  tb.dirty = true;
+  if (await saveTab(tb)) return true;
+  tb.encoding = prev.encoding;
+  tb.bom = prev.bom;
+  tb.dirty = !docOf(tb).eq(tb.saved) || formatChanged(tb);
+  return false;
+}
+
 /* ---------- files ---------- */
-async function readInto(path: string) {
-  const data = await invoke<FileData>('read_file', { path });
+async function readInto(path: string, encoding?: string) {
+  const data = await invoke<FileData>('read_file', { path, encoding: encoding ?? null });
   const lang = data.note != null ? { support: [], label: 'Plain Text' } : await editor.languageFor(baseName(path));
   const writable = data.content != null && !data.lossy;
   return { data, lang, state: editor.makeState(data.note ?? data.content ?? '', lang, editModeFor(data.path, writable)) };
 }
 
-async function reloadTab(tb: Tab): Promise<void> {
-  const { data, lang, state } = await readInto(tb.path);
+async function reloadTab(tb: Tab, encoding?: string): Promise<void> {
+  const { data, lang, state } = await readInto(tb.path, encoding);
   tb.load(data, state, lang.label);
   if (tb === store.active) editor.replaceState(state);
 }

@@ -183,6 +183,9 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 #status .grow { flex: 1; }
 
 /* ---------- update notice ---------- */
+.st-btn { padding: 0 6px; margin: 0 -6px; height: 18px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.st-btn:hover:not(:disabled), .st-btn:focus-visible { background: var(--surface); color: var(--fg); outline: none; }
+.st-btn:disabled { cursor: default; }
 #st-ro { padding: 0 6px; height: 18px; border: 0; border-radius: 4px; background: none; color: var(--fg-faint); font: inherit; cursor: default; }
 #st-ro:hover { background: var(--surface); color: var(--fg-dim); }
 #st-update { padding: 0 6px; height: 18px; border: 0; border-radius: 4px; background: none; color: var(--accent); font: inherit; cursor: pointer; }
