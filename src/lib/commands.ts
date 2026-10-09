@@ -8,6 +8,7 @@ import { activate, canEdit, closeAll, closeAllExcept, closeTab, cycle, newFile, 
 import { ENCODINGS, encodingLabel } from './encodings';
 import { openSearch } from './searchTabs.svelte';
 import { setMdView, togglePreview } from './markdown.svelte';
+import { errText, notify } from './notify.svelte';
 
 export interface Command extends Item {
   /** Hidden from the palette while this returns false. */
@@ -91,6 +92,18 @@ async function copyText(text: string): Promise<void> {
 
 /* ---------- the list ---------- */
 const hasTab = () => !!store.active;
+/** Whether the Explorer right-click entry is installed (null until we've asked). */
+let menuOn: boolean | null = null;
+void invoke<boolean>('context_menu_enabled').then((on) => { menuOn = on; }).catch(() => {});
+async function setExplorerMenu(enabled: boolean): Promise<void> {
+  try {
+    menuOn = await invoke<boolean>('set_context_menu', { enabled });
+    notify(menuOn ? '"Open with Codepad" added to the right-click menu of text and code files.' : '"Open with Codepad" removed from the right-click menu.');
+  } catch (e) {
+    notify(`Couldn't change the right-click menu: ${errText(e)}`, 'error');
+  }
+}
+
 const manyTabs = () => store.tabs.length > 1;
 const isMd = () => !!store.active?.isMd;
 
@@ -207,6 +220,16 @@ export const commands: Command[] = [
     run: () => void installUpdate(),
   },
 
+  {
+    title: 'Explorer Menu: Add "Open with Codepad" for Text and Code Files',
+    when: () => menuOn === false,
+    run: () => void setExplorerMenu(true),
+  },
+  {
+    title: 'Explorer Menu: Remove "Open with Codepad"',
+    when: () => menuOn === true,
+    run: () => void setExplorerMenu(false),
+  },
   { title: 'Open Settings File', run: () => void openPath(meta.settingsPath) },
   { title: 'Close Codepad', keys: 'Ctrl+Q', run: () => void getCurrentWindow().close() },
 ];

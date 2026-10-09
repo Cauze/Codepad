@@ -1,3 +1,4 @@
+mod shell;
 mod update;
 
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8, WINDOWS_1252};
@@ -304,6 +305,9 @@ fn initial_files() -> Vec<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if shell::handle_cli() {
+        return;
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(w) = app.get_webview_window("main") {
@@ -317,9 +321,10 @@ pub fn run() {
         .manage(update::UpdateState::default())
         .setup(|_| {
             std::thread::spawn(update::cleanup);
+            std::thread::spawn(shell::heal);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, write_file, save_dialog, read_image_data, open_external, file_mtime, initial_files,
+        .invoke_handler(tauri::generate_handler![read_file, write_file, save_dialog, read_image_data, open_external, shell::context_menu_enabled, shell::set_context_menu, file_mtime, initial_files,
             canonical_path,
             read_config,
             write_config,

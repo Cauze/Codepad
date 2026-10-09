@@ -21,6 +21,7 @@ It's inspired by [Markpad](https://github.com/sftwrdotdev/Markpad), which does t
 - **Light editing, off by default.** Turn on `editable` for undo/redo, auto-indent, `Ctrl+S`, an unsaved dot on the tab, and a prompt before you close anything unsaved. Optional auto save. **New File** (`Ctrl+N`) and **Save As** work too.
 - **Encodings and line endings.** UTF-8, UTF-16, Windows code pages, Shift JIS, GBK and more. The status bar shows the encoding and line ending of the current file; click either to reopen with another encoding, save in one, or switch between LF and CRLF.
 - **Markdown preview.** Markdown files get a **Code / Split / Preview** switch in the status bar (`Ctrl+Shift+V` toggles the preview). Split view scrolls the text and the rendered page together. Tables, task lists, code blocks (highlighted), local images and links all work, and raw HTML is sanitised. It's a quick look, not a full reader.
+- **Open with Codepad** in the Explorer right-click menu, for text and code files only (not images, executables and the like). The installer asks; you can also switch it on or off any time from the command palette (**Explorer Menu**), which also works for the portable exe.
 - **Search across open tabs** (`Ctrl+Shift+F`): results grouped by file, with match case, whole word and regex.
 - **Minimap**, off by default, with the same options as VS Code's `editor.minimap`.
 - **Find** (`Ctrl+F`) with a VS Code-style floating widget: match case, whole word, regex, match count, and replace (with capture groups) when editing is on.
@@ -36,7 +37,7 @@ Download the latest build from the [Releases page](https://github.com/Cauze/Code
 
 | File | |
 | --- | --- |
-| `Codepad_x.y.z_x64-setup.exe` | Installer. Adds **Open with Codepad** to the right-click menu of every file; uninstalling removes it again. |
+| `Codepad_x.y.z_x64-setup.exe` | Installer. Asks whether to add **Open with Codepad** to the right-click menu; uninstalling removes it again. |
 | `Codepad_x.y.z_x64-portable.exe` | Portable: a single exe, nothing to install |
 
 Windows 10 or 11 is required. The builds aren't code-signed yet, so SmartScreen may warn you the first time you run them.
