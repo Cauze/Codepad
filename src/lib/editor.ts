@@ -25,7 +25,7 @@ export interface Status {
   lines: string;
 }
 
-const PLAIN: Lang = { support: [], label: 'Plain Text' };
+export const PLAIN: Lang = { support: [], label: 'Plain Text' };
 
 export async function languageFor(name: string): Promise<Lang> {
   const desc = LanguageDescription.matchFilename(languages, name);
@@ -53,6 +53,7 @@ const highlight = HighlightStyle.define([
 ]);
 
 /* ---------- settings-driven pieces live in compartments so they can be swapped per tab ---------- */
+const langComp = new Compartment();
 const wrapComp = new Compartment();
 const numbersComp = new Compartment();
 const wrapExt = (): Extension => (settings.wordWrap ? EditorView.lineWrapping : []);
@@ -115,7 +116,7 @@ export function makeState(doc: string, lang: Lang, mode: EditMode): EditorState 
       search({ top: true, createPanel: createFindPanel }),
       syntaxHighlighting(highlight),
       keymap.of([{ key: 'Mod-h', run: openReplace }, ...findKeys, ...foldKeymap, ...historyKeymap, ...closeBracketsKeymap, indentWithTab, ...defaultKeymap]),
-      lang.support,
+      langComp.of(lang.support),
       EditorView.updateListener.of((u) => {
         if (u.selectionSet || u.docChanged) onStatus(statusOf(u.state));
         if (u.docChanged) onEdit(u.state.doc);
@@ -159,6 +160,9 @@ export function replaceState(state: EditorState): void {
   e.scrollDOM.scrollTop = scroll;
   onStatus(statusOf(state));
 }
+
+/** Switch the on-screen tab's language (after Save As gives an untitled file a name). */
+export const setLanguageActive = (lang: Lang): void => view?.dispatch({ effects: langComp.reconfigure(lang.support) });
 
 export const focus = (): void => view?.focus();
 export const requestMeasure = (): void => view?.requestMeasure();

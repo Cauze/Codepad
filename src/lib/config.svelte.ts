@@ -12,6 +12,7 @@ export type Startup = 'restore' | 'empty';
 /** When edited files are written back without asking. */
 export type AutoSave = 'off' | 'afterDelay' | 'onFocusChange';
 export type CursorStyle = 'line' | 'block' | 'underline';
+export type LineEnding = 'lf' | 'crlf';
 
 export interface Settings {
   theme: Theme;
@@ -21,6 +22,8 @@ export interface Settings {
   autoSave: AutoSave;
   /** ms to wait after the last keystroke when autoSave is "afterDelay", 200-60000 */
   autoSaveDelay: number;
+  /** Line endings for new files. */
+  defaultLineEnding: LineEnding;
   /** "restore" reopens the tabs from last time; "empty" starts with none. */
   startup: Startup;
   /** Look for a newer release shortly after launch (it only ever shows a notice). */
@@ -62,6 +65,7 @@ export const DEFAULTS: Readonly<Settings> = Object.freeze({
   editable: false,
   autoSave: 'off',
   autoSaveDelay: 1000,
+  defaultLineEnding: 'lf',
   startup: 'restore',
   checkForUpdates: true,
   cursorStyle: 'line',
@@ -91,6 +95,7 @@ function sanitize(raw: unknown): Settings {
     editable: typeof o.editable === 'boolean' ? o.editable : DEFAULTS.editable,
     autoSave: o.autoSave === 'off' || o.autoSave === 'afterDelay' || o.autoSave === 'onFocusChange' ? o.autoSave : DEFAULTS.autoSave,
     autoSaveDelay: Math.round(num(o.autoSaveDelay, 200, 60000, DEFAULTS.autoSaveDelay)),
+    defaultLineEnding: o.defaultLineEnding === 'lf' || o.defaultLineEnding === 'crlf' ? o.defaultLineEnding : DEFAULTS.defaultLineEnding,
     startup: o.startup === 'restore' || o.startup === 'empty' ? o.startup : DEFAULTS.startup,
     checkForUpdates: typeof o.checkForUpdates === 'boolean' ? o.checkForUpdates : DEFAULTS.checkForUpdates,
     cursorStyle: o.cursorStyle === 'line' || o.cursorStyle === 'block' || o.cursorStyle === 'underline' ? o.cursorStyle : DEFAULTS.cursorStyle,

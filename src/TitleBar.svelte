@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window';
-  import { activate, closeTab, dirName, pickFiles, store, type Tab } from './lib/tabs.svelte';
+  import { activate, closeTab, dirName, newFile, store, type Tab } from './lib/tabs.svelte';
 
   const win = getCurrentWindow();
   let tabsEl: HTMLDivElement;
@@ -35,14 +35,14 @@
         class:missing={tb.missing}
         class:dirty={tb.dirty}
         class:stale={tb.stale}
-        title={tb.stale ? `${tb.path}
+        title={tb.untitled ? tb.name : tb.stale ? `${tb.path}
 Changed on disk since you opened it` : tb.path}
         role="tab"
         tabindex="-1"
         aria-selected={tb === store.active}
         onmousedown={(e) => onTabDown(e, tb)}
       >
-        <span class="name">{tb.name}{#if duplicated.has(tb.name)}<span class="dir">{dirName(tb.path)}</span>{/if}</span>
+        <span class="name">{tb.name}{#if !tb.untitled && duplicated.has(tb.name)}<span class="dir">{dirName(tb.path)}</span>{/if}</span>
         <button class="x" aria-label={tb.dirty ? 'Close tab (unsaved changes)' : 'Close tab'} onclick={(e) => { e.stopPropagation(); void closeTab(tb); }}>
           <svg class="cross" width="8" height="8" viewBox="0 0 8 8"><path d="M0 0l8 8M8 0L0 8" stroke="currentColor" stroke-width="1.2" fill="none" /></svg>
           <svg class="dot" width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3.2" fill="currentColor" /></svg>
@@ -51,7 +51,7 @@ Changed on disk since you opened it` : tb.path}
     {/each}
   </div>
 
-  <button id="add" title="Open file (Ctrl+O)" aria-label="Open file" onclick={() => void pickFiles()}>
+  <button id="add" title="New file (Ctrl+N)" aria-label="New file" onclick={newFile}>
     <svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3" fill="none" /></svg>
   </button>
   <div class="spacer" data-tauri-drag-region></div>

@@ -4,7 +4,7 @@ import { DEFAULTS, changeSetting, meta, setFontSize, settings, type AutoSave, ty
 import * as editor from './editor';
 import { ask, closePalette, openList, pal, pick, type Item } from './palette.svelte';
 import { checkForUpdates, installUpdate, upd } from './update.svelte';
-import { activate, canEdit, closeAll, closeAllExcept, closeTab, cycle, openPath, pickFiles, reopenWithEncoding, revertTab, saveAll, saveTab, saveWithEncoding, setLineEnding, store } from './tabs.svelte';
+import { activate, canEdit, closeAll, closeAllExcept, closeTab, cycle, newFile, openPath, pickFiles, reopenWithEncoding, revertTab, saveAll, saveTab, saveTabAs, saveWithEncoding, setLineEnding, store } from './tabs.svelte';
 import { ENCODINGS, encodingLabel } from './encodings';
 
 export interface Command extends Item {
@@ -116,15 +116,17 @@ const startup = (name: Startup, label: string): Command => ({
 });
 
 export const commands: Command[] = [
+  { title: 'New File', keys: 'Ctrl+N', run: newFile },
   { title: 'Open File…', keys: 'Ctrl+O', run: () => void pickFiles() },
   { title: 'Switch Tab…', keys: 'Ctrl+P', when: hasTab, run: () => void switchTab() },
   { title: 'Go to Line…', keys: 'Ctrl+G', when: hasTab, run: () => void gotoLine() },
   { title: 'Next Tab', keys: 'Ctrl+Tab', when: manyTabs, run: () => cycle(1) },
   { title: 'Previous Tab', keys: 'Ctrl+Shift+Tab', when: manyTabs, run: () => cycle(-1) },
 
-  { title: 'Save', keys: 'Ctrl+S', when: () => !!store.active?.dirty, run: () => store.active && void saveTab(store.active) },
-  { title: 'Save All', keys: 'Ctrl+Shift+S', when: () => store.tabs.some((t) => t.dirty), run: () => void saveAll() },
-  { title: 'Revert File', when: () => !!store.active && (store.active.dirty || store.active.stale), run: () => store.active && void revertTab(store.active) },
+  { title: 'Save', keys: 'Ctrl+S', when: () => !!store.active && (store.active.dirty || store.active.untitled), run: () => store.active && void saveTab(store.active) },
+  { title: 'Save As…', keys: 'Ctrl+Shift+S', when: () => !!store.active?.writable, run: () => store.active && void saveTabAs(store.active) },
+  { title: 'Save All', keys: 'Ctrl+Alt+S', when: () => store.tabs.some((t) => t.dirty), run: () => void saveAll() },
+  { title: 'Revert File', when: () => !!store.active && !store.active.untitled && (store.active.dirty || store.active.stale), run: () => store.active && void revertTab(store.active) },
 
   {
     title: 'Line Endings: LF',
@@ -136,7 +138,7 @@ export const commands: Command[] = [
     when: () => !!store.active && canEdit(store.active) && !store.active.crlf,
     run: () => store.active && setLineEnding(store.active, true),
   },
-  { title: 'Reopen with Encoding…', when: hasTab, run: () => void chooseEncoding('reopen') },
+  { title: 'Reopen with Encoding…', when: () => !!store.active && !store.active.untitled, run: () => void chooseEncoding('reopen') },
   { title: 'Save with Encoding…', when: () => !!store.active && canEdit(store.active), run: () => void chooseEncoding('save') },
 
   { title: 'Close Current File', keys: 'Ctrl+W', when: hasTab, run: () => store.active && void closeTab(store.active) },
@@ -148,10 +150,10 @@ export const commands: Command[] = [
   },
   { title: 'Close All Files', when: () => store.tabs.length > 0, run: () => void closeAll() },
 
-  { title: 'Copy File Path', when: hasTab, run: () => store.active && void copyText(store.active.path) },
+  { title: 'Copy File Path', when: () => !!store.active && !store.active.untitled, run: () => store.active && void copyText(store.active.path) },
   {
     title: 'Reveal in Explorer',
-    when: hasTab,
+    when: () => !!store.active && !store.active.untitled,
     run: () => store.active && void invoke('reveal_in_explorer', { path: store.active.path }).catch(console.error),
   },
 
@@ -174,6 +176,9 @@ export const commands: Command[] = [
   autoSave('off', 'Off'),
   autoSave('afterDelay', 'After Delay'),
   autoSave('onFocusChange', 'On Focus Change'),
+
+  { title: 'Line Endings for New Files: LF', when: () => settings.defaultLineEnding !== 'lf', run: () => changeSetting('defaultLineEnding', 'lf') },
+  { title: 'Line Endings for New Files: CRLF', when: () => settings.defaultLineEnding !== 'crlf', run: () => changeSetting('defaultLineEnding', 'crlf') },
 
   startup('restore', 'Reopen Last Files'),
   startup('empty', 'Start Empty'),

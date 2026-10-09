@@ -3,7 +3,7 @@ import { DEFAULTS, changeSetting, setFontSize, settings } from './config.svelte'
 import { dlg } from './dialog.svelte';
 import { gotoLine, switchTab, togglePalette } from './commands';
 import { closePalette } from './palette.svelte';
-import { activate, closeTab, cycle, pickFiles, saveAll, saveTab, store } from './tabs.svelte';
+import { activate, closeTab, cycle, newFile, pickFiles, saveAll, saveTab, saveTabAs, store } from './tabs.svelte';
 
 export function handleKeydown(e: KeyboardEvent): void {
   if (dlg.open) return; // the dialog handles its own keys
@@ -23,11 +23,13 @@ export function handleKeydown(e: KeyboardEvent): void {
 
   const k = e.key;
   const has = !!store.active;
-  if (k === 'o') { e.preventDefault(); closePalette(); void pickFiles(); }
+  if (e.altKey && !e.shiftKey && k.toLowerCase() === 's') { e.preventDefault(); void saveAll(); return; }
+  if (k.toLowerCase() === 'n' && !e.shiftKey && !e.altKey) { e.preventDefault(); closePalette(); newFile(); }
+  else if (k === 'o') { e.preventDefault(); closePalette(); void pickFiles(); }
   else if (k === 'w') { e.preventDefault(); closePalette(); if (store.active) void closeTab(store.active); }
   else if (k.toLowerCase() === 's') {
     e.preventDefault();
-    if (e.shiftKey) void saveAll();
+    if (e.shiftKey) { if (store.active?.writable) void saveTabAs(store.active); }
     else if (store.active) void saveTab(store.active);
   }
   else if (k === 'q') { e.preventDefault(); void getCurrentWindow().close(); }

@@ -4,6 +4,7 @@ use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8, WINDOWS_1252};
 use serde::Serialize;
 use std::{fs, path::Path, time::UNIX_EPOCH};
 use tauri::{Emitter, Manager};
+use tauri_plugin_dialog::DialogExt;
 
 const MAX_BYTES: u64 = 20 * 1024 * 1024;
 
@@ -145,6 +146,29 @@ fn write_file(path: String, content: String, encoding: String, bom: bool, expect
     mtime_ms(p)
 }
 
+/// The "Save As" dialog. `None` = cancelled. If `CODEPAD_SAVE_AS` is set it names the answer
+/// instead (so automated UI tests don't need a human at the file dialog).
+#[tauri::command]
+async fn save_dialog(app: tauri::AppHandle, name: String, dir: Option<String>) -> Option<String> {
+    if let Ok(forced) = std::env::var("CODEPAD_SAVE_AS") {
+        return Some(forced);
+    }
+    let mut dlg = app.dialog().file().set_file_name(name);
+    if let Some(d) = dir.filter(|d| Path::new(d).is_dir()) {
+        dlg = dlg.set_directory(d);
+    }
+    let picked = dlg.blocking_save_file()?;
+    picked.into_path().ok().map(|p| canon_new(&p))
+}
+
+/// Like `canon`, for a file that may not exist yet: resolve the folder, keep the new name.
+fn canon_new(p: &Path) -> String {
+    match (p.parent(), p.file_name()) {
+        (Some(dir), Some(name)) if !p.exists() => Path::new(&canon(dir)).join(name).to_string_lossy().into_owned(),
+        _ => canon(p),
+    }
+}
+
 #[tauri::command]
 fn file_mtime(path: String) -> Result<u64, String> {
     mtime_ms(Path::new(&path))
@@ -254,7 +278,7 @@ pub fn run() {
             std::thread::spawn(update::cleanup);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, write_file, file_mtime, initial_files,
+        .invoke_handler(tauri::generate_handler![read_file, write_file, save_dialog, file_mtime, initial_files,
             canonical_path,
             read_config,
             write_config,

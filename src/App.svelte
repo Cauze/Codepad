@@ -69,7 +69,7 @@
   <div id="empty" class:show={!store.active}>
     <div class="empty-inner">
       <div class="logo">{'{ }'}</div>
-      <p>Drop a file here or press <kbd>Ctrl</kbd> <kbd>O</kbd></p>
+      <p>Drop a file here or press <kbd>Ctrl</kbd> <kbd>O</kbd> <span class="or">·</span> <kbd>Ctrl</kbd> <kbd>N</kbd> for a new one</p>
       <ul id="recent">
         {#each appState.recent as p (p)}
           <li>
