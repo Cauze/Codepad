@@ -224,3 +224,71 @@ pub fn set_path(enabled: bool) -> Result<bool, String> {
     if enabled { register_path()? } else { unregister_path()? }
     Ok(is_path_registered())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn extensions_are_plain_lowercase_and_unique() {
+        let mut seen = HashSet::new();
+        for ext in EXTENSIONS {
+            assert!(!ext.is_empty() && !ext.starts_with('.'), "{ext:?} should be written without the dot");
+            assert_eq!(*ext, ext.to_ascii_lowercase(), "{ext:?} should be lowercase");
+            assert!(seen.insert(*ext), "{ext:?} is listed twice");
+        }
+    }
+
+    #[test]
+    fn menu_covers_text_and_code_but_not_binaries() {
+        for ext in ["txt", "md", "json", "rs", "ts", "py", "html", "css", "sh", "ps1"] {
+            assert!(EXTENSIONS.contains(&ext), "{ext} should get the menu entry");
+        }
+        for ext in ["png", "jpg", "mp4", "exe", "dll", "zip", "pdf", "docx"] {
+            assert!(!EXTENSIONS.contains(&ext), "{ext} should not get the menu entry");
+        }
+    }
+
+    #[test]
+    fn menu_command_quotes_exe_and_file() {
+        assert_eq!(command(&PathBuf::from(r"C:\Program Files\Codepad\codepad.exe")), r#""C:\Program Files\Codepad\codepad.exe" "%1""#);
+    }
+
+    #[test]
+    fn same_dir_ignores_case_whitespace_and_trailing_slash() {
+        let dir = Path::new(r"C:\Users\Me\AppData\Local\Codepad\bin");
+        assert!(same_dir(r"C:\Users\Me\AppData\Local\Codepad\bin", dir));
+        assert!(same_dir(r"c:\users\me\appdata\local\codepad\BIN\", dir));
+        assert!(same_dir(r"  C:\Users\Me\AppData\Local\Codepad\bin ", dir));
+        assert!(!same_dir(r"C:\Users\Me\AppData\Local\Codepad", dir));
+        assert!(!same_dir(r"C:\Users\Me\AppData\Local\Codepad\bin2", dir));
+    }
+
+    #[test]
+    fn cmd_launcher_starts_the_exe_without_waiting_and_passes_arguments_on() {
+        let text = cmd_launcher(Path::new(r"C:\Apps\Codepad\codepad.exe"));
+        assert_eq!(text, "@echo off\r\nstart \"\" \"C:\\Apps\\Codepad\\codepad.exe\" %*\r\n");
+    }
+
+    #[test]
+    fn heal_can_read_the_exe_back_out_of_the_cmd_launcher() {
+        // heal_path() takes the 4th quote-separated piece; this keeps it in step with cmd_launcher()
+        for exe in [r"C:\Apps\Codepad\codepad.exe", r"C:\Program Files\Codepad\codepad.exe"] {
+            assert_eq!(cmd_launcher(Path::new(exe)).split('"').nth(3), Some(exe));
+        }
+    }
+
+    #[test]
+    fn sh_launcher_uses_forward_slashes_and_detaches() {
+        let text = sh_launcher(Path::new(r"C:\Apps\Codepad\codepad.exe"));
+        assert_eq!(text, "#!/bin/sh\n\"C:/Apps/Codepad/codepad.exe\" \"$@\" >/dev/null 2>&1 &\n");
+        assert!(!text.contains('\r'), "a CR in a shell script breaks the shebang line");
+    }
+
+    #[test]
+    fn registry_strings_are_utf16_with_a_terminator() {
+        assert_eq!(&*to_wide("a;é"), &[b'a', 0, b';', 0, 0xe9, 0, 0, 0]);
+        assert_eq!(&*to_wide(""), &[0, 0]);
+    }
+}
