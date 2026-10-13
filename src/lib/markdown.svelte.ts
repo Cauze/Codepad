@@ -83,8 +83,16 @@ export async function setMdView(tb: Tab, view: MarkdownView): Promise<void> {
   await tick();
   editor.requestMeasure();
   if (view !== 'preview') {
-    if (pos) editor.scrollToLine(pos.line, pos.frac);
+    // Focus first: WebKit may scroll a freshly focused editor to its cursor, which would undo the scroll below.
     if (store.active === tb) editor.focus();
+    if (pos) {
+      editor.scrollToLine(pos.line, pos.frac);
+      // The editor was laid out out of sight until a moment ago, and its first measuring can scroll it again
+      // (to the cursor), so once it has measured, put it back where the reader was.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (store.active === tb && tb.view === view) editor.scrollToLine(pos.line, pos.frac);
+      }));
+    }
   }
 }
 

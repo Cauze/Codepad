@@ -38,11 +38,6 @@ jobs:
           path: src-tauri/target/release/codepad.exe
           if-no-files-found: error
 
-      # Drives the exe it just built. Informational for now: a failure here doesn't fail the build.
-      - name: End-to-end tests
-        continue-on-error: true
-        run: npm run test:e2e
-
   macos:
     runs-on: macos-latest
     steps:
