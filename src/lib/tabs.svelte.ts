@@ -535,6 +535,8 @@ export async function boot(): Promise<void> {
   const win = getCurrentWindow();
   await loadConfig();
 
+  // Listen before asking for the starting files: on a Mac, files can arrive from Finder at any moment during start-up.
+  await listen<string[]>('open-files', (e) => openPaths(e.payload));
   const fromArgs = await invoke<string[]>('initial_files');
   if (fromArgs.length) {
     await openPaths(fromArgs);
@@ -560,7 +562,6 @@ export async function boot(): Promise<void> {
   void getCurrentWebview().onDragDropEvent((e) => {
     if (e.payload.type === 'drop') void openPaths(e.payload.paths);
   });
-  void listen<string[]>('open-files', (e) => openPaths(e.payload));
   await restoreWindow();
   await win.show();
   void trackWindow();

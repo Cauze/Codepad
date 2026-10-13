@@ -7,6 +7,7 @@ import { search, searchKeymap, highlightSelectionMatches } from '@codemirror/sea
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { tags as t, highlightTree } from '@lezer/highlight';
 import { settings } from './config.svelte';
+import { isMac } from './platform';
 import { createFindPanel, openReplace } from './findPanel';
 import { minimapExtension } from './minimap';
 
@@ -88,7 +89,7 @@ export function detectIndent(text: string): string {
   return ' '.repeat(Math.min(8, Math.max(2, smallest || 2)));
 }
 
-// Ctrl+G is "Go to Line" here, so drop the search panel's find-next on it (F3 still works).
+// Ctrl+G (Cmd+G on a Mac) is "Go to Line" here, so drop the search panel's find-next on it (F3 still works).
 const findKeys = searchKeymap.filter((k) => k.key !== 'Mod-g' && k.key !== 'Shift-Mod-g');
 
 let view: EditorView | undefined;
@@ -120,7 +121,7 @@ export function makeState(doc: string, lang: Lang, mode: EditMode): EditorState 
       highlightSelectionMatches(),
       search({ top: true, createPanel: createFindPanel }),
       syntaxHighlighting(highlight),
-      keymap.of([{ key: 'Mod-h', run: openReplace }, ...findKeys, ...foldKeymap, ...historyKeymap, ...closeBracketsKeymap, indentWithTab, ...defaultKeymap]),
+      keymap.of([{ key: isMac ? 'Mod-Alt-f' : 'Mod-h', run: openReplace }, ...findKeys, ...foldKeymap, ...historyKeymap, ...closeBracketsKeymap, indentWithTab, ...defaultKeymap]),
       langComp.of(lang.support),
       EditorView.updateListener.of((u) => {
         if (u.selectionSet || u.docChanged) onStatus(statusOf(u.state));

@@ -3,6 +3,8 @@
 import { execSync } from 'node:child_process';
 import { suite } from './harness.mjs';
 
+if (process.platform !== 'win32') { console.log('SKIP  the Explorer menu is a Windows feature'); process.exit(0); }
+
 const reg = (k) => { try { execSync(`reg query "${k}"`, { stdio: 'ignore' }); return true; } catch { return false; } };
 const KEY = (ext) => `HKCU\\Software\\Classes\\SystemFileAssociations\\.${ext}\\shell\\Codepad`;
 

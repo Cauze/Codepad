@@ -4,6 +4,10 @@ version = "0.4.2"
 license = "MIT"
 edition = "2021"
 
+[features]
+# Lets the end-to-end tests drive the page on macOS (see src/e2e.rs). Never part of a release build.
+e2e = []
+
 [lib]
 name = "codepad_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -22,6 +26,8 @@ serde_json = "1"
 sha2 = "0.10"
 # GitHub API + downloads for the in-app updater. native-tls = the OS (SChannel) stack, so no TLS library is bundled.
 ureq = { version = "3", default-features = false, features = ["native-tls", "json"] }
+
+[target.'cfg(windows)'.dependencies]
 winreg = "0.56.0"
 
 [profile.release]

@@ -1,5 +1,6 @@
 import { availableMonitors, getCurrentWindow, PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window';
 import { appState, saveState } from './config.svelte';
+import { isMac } from './platform';
 
 /*
  * Remembers the window's size, position and maximized state in state.json (physical pixels).
@@ -53,4 +54,10 @@ export async function trackWindow(): Promise<void> {
   const soon = () => { clearTimeout(timer); timer = setTimeout(() => void capture(), 500); };
   await win.onMoved(soon);
   await win.onResized(soon);
+  if (isMac) {
+    // Full screen hides the traffic lights, so the tabs don't need to make room for them.
+    const sync = async () => { document.documentElement.dataset.fullscreen = (await win.isFullscreen()) ? 'on' : 'off'; };
+    await win.onResized(() => void sync());
+    void sync();
+  }
 }

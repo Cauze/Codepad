@@ -211,7 +211,7 @@ function makePlugin(o: MinimapOptions, style: Highlighter) {
     down(e: PointerEvent): void {
       if (e.button !== 0) return;
       e.preventDefault();
-      this.dom.setPointerCapture(e.pointerId);
+      try { this.dom.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
       const r = this.slider.getBoundingClientRect();
       if (e.target === this.slider) this.drag = { grab: e.clientY - r.top };
       else { this.drag = { grab: r.height / 2 }; this.scrollToLine(this.lineAt(e.clientY), true); }

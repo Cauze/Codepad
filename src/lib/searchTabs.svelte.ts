@@ -1,5 +1,6 @@
 import * as editor from './editor';
 import { closePalette } from './palette.svelte';
+import { letter } from './platform';
 import { activate, store, tabDoc, type Tab } from './tabs.svelte';
 
 /*
@@ -150,7 +151,7 @@ export function onSearchKeydown(e: KeyboardEvent): void {
   else if (e.key === 'ArrowDown') { e.preventDefault(); if (hits.length) ts.sel = (ts.sel + 1) % hits.length; }
   else if (e.key === 'ArrowUp') { e.preventDefault(); if (hits.length) ts.sel = (ts.sel - 1 + hits.length) % hits.length; }
   else if (e.key === 'Enter') { e.preventDefault(); const h = hits[ts.sel]; if (h) jumpTo(h); }
-  else if (e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'c') { e.preventDefault(); toggle('caseSensitive'); }
-  else if (e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'w') { e.preventDefault(); toggle('wholeWord'); }
-  else if (e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'r') { e.preventDefault(); toggle('regex'); }
+  else if (e.altKey && !e.ctrlKey && !e.metaKey && letter(e) === 'c') { e.preventDefault(); toggle('caseSensitive'); }
+  else if (e.altKey && !e.ctrlKey && !e.metaKey && letter(e) === 'w') { e.preventDefault(); toggle('wholeWord'); }
+  else if (e.altKey && !e.ctrlKey && !e.metaKey && letter(e) === 'r') { e.preventDefault(); toggle('regex'); }
 }

@@ -3,6 +3,7 @@ name: Release
 # Publish by pushing a version tag:
 #   git tag v0.2.0 && git push origin v0.2.0
 # The tag must match the version in package.json, src-tauri/tauri.conf.json and src-tauri/Cargo.toml.
+# Windows and macOS are built side by side and published together as one release.
 on:
   push:
     tags: ['v*']
@@ -11,15 +12,12 @@ permissions:
   contents: write
 
 jobs:
-  windows:
-    runs-on: windows-latest
+  verify:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # the release notes are built from the commit history
 
       - name: Check the tag matches the app version
-        shell: bash
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -37,6 +35,12 @@ jobs:
           }
           if (bad) process.exit(1);
           EOF
+
+  windows:
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -71,8 +75,74 @@ jobs:
         shell: bash
         run: cp src-tauri/target/release/bundle/nsis/*-setup.exe release/
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: release/*
+          if-no-files-found: error
+
+  macos:
+    needs: verify
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # One universal app (Apple Silicon and Intel). The builds aren't notarized yet, so they are only
+      # ad-hoc signed; the README says how to open them.
+      - name: Build
+        run: npx tauri build --target universal-apple-darwin --bundles app,dmg
+
+      # The .dmg is what people download. The .app.tar.gz is what the in-app updater downloads: it
+      # unpacks it next to the running app and swaps the two (see src-tauri/src/update.rs).
+      - name: Stage disk image and updater archive
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          out=src-tauri/target/universal-apple-darwin/release/bundle
+          app="$out/macos/Codepad.app"
+          lipo -info "$app/Contents/MacOS/codepad"
+          codesign --verify --deep --strict "$app"
+          mkdir release
+          cp "$out"/dmg/*.dmg "release/Codepad_${TAG#v}_universal.dmg"
+          COPYFILE_DISABLE=1 tar -czf "release/Codepad_${TAG#v}_universal.app.tar.gz" -C "$out/macos" Codepad.app
+          ls -l release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the release notes are built from the commit history
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+
       - name: Write release notes
-        shell: bash
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -91,7 +161,6 @@ jobs:
           cat release-notes.md
 
       - name: Publish release
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}

@@ -23,6 +23,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Check and unit tests
+        run: |
+          npm run check
+          npm run test:unit
+          npm test
+
       - name: Build
         run: npx tauri build --no-bundle
 
@@ -31,3 +37,61 @@ jobs:
           name: codepad-windows
           path: src-tauri/target/release/codepad.exe
           if-no-files-found: error
+
+      # Drives the exe it just built. Informational for now: a failure here doesn't fail the build.
+      - name: End-to-end tests
+        continue-on-error: true
+        run: npm run test:e2e
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Check and unit tests
+        run: |
+          npm run check
+          npm run test:unit
+          npm test
+
+      # One universal app (Apple Silicon and Intel) and the disk image to download it in.
+      - name: Build
+        run: npx tauri build --target universal-apple-darwin --bundles app,dmg
+
+      - name: Pack
+        run: |
+          out=src-tauri/target/universal-apple-darwin/release/bundle
+          mkdir dist-mac
+          cp "$out"/dmg/*.dmg dist-mac/
+          COPYFILE_DISABLE=1 tar -czf dist-mac/Codepad.app.tar.gz -C "$out/macos" Codepad.app
+          lipo -info "$out/macos/Codepad.app/Contents/MacOS/codepad"
+          codesign --verify --deep --strict "$out/macos/Codepad.app"
+          ls -l dist-mac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codepad-macos
+          path: dist-mac/*
+          if-no-files-found: error
+
+      # A test build with the bridge the tests drive the page through, then the tests. Informational for now.
+      - name: End-to-end tests
+        continue-on-error: true
+        run: |
+          npx tauri build --debug --bundles app --features e2e
+          npm run test:e2e

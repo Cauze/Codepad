@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { fmt } from './lib/platform';
   import { closeSearch, flatHits, jumpTo, onSearchKeydown, results, searchSoon, toggle, ts } from './lib/searchTabs.svelte';
 
   let input: HTMLInputElement;
@@ -42,9 +43,9 @@
         oninput={searchSoon}
         onkeydown={onSearchKeydown}
       />
-      <button class="ts-opt" class:on={ts.caseSensitive} title="Match case (Alt+C)" aria-pressed={ts.caseSensitive} onmousedown={(e) => { e.preventDefault(); toggle('caseSensitive'); }}>Aa</button>
-      <button class="ts-opt" class:on={ts.wholeWord} title="Whole word (Alt+W)" aria-pressed={ts.wholeWord} onmousedown={(e) => { e.preventDefault(); toggle('wholeWord'); }}><u>ab</u></button>
-      <button class="ts-opt" class:on={ts.regex} title="Regular expression (Alt+R)" aria-pressed={ts.regex} onmousedown={(e) => { e.preventDefault(); toggle('regex'); }}>.*</button>
+      <button class="ts-opt" class:on={ts.caseSensitive} title={fmt('Match case (Alt+C)')} aria-pressed={ts.caseSensitive} onmousedown={(e) => { e.preventDefault(); toggle('caseSensitive'); }}>Aa</button>
+      <button class="ts-opt" class:on={ts.wholeWord} title={fmt('Whole word (Alt+W)')} aria-pressed={ts.wholeWord} onmousedown={(e) => { e.preventDefault(); toggle('wholeWord'); }}><u>ab</u></button>
+      <button class="ts-opt" class:on={ts.regex} title={fmt('Regular expression (Alt+R)')} aria-pressed={ts.regex} onmousedown={(e) => { e.preventDefault(); toggle('regex'); }}>.*</button>
     </div>
     <div id="ts-summary" class:err={!!ts.error}>{summary}</div>
     <div id="ts-list" bind:this={list}>

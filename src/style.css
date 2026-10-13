@@ -297,3 +297,12 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
 #md kbd { font-size: .85em; }
 #md summary { cursor: pointer; }
 #md mark { background: color-mix(in srgb, var(--syn-meta) 35%, transparent); color: inherit; border-radius: 3px; }
+
+/* ---------- macOS ---------- */
+/* The window has a real title bar with the traffic lights overlaid on its left end; the tabs start after them. */
+:root[data-platform="mac"] {
+  --mono: 'SF Mono', Menlo, Monaco, 'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace;
+  --ui: -apple-system, 'SF Pro Text', system-ui, sans-serif;
+}
+#traffic-gap { width: 78px; flex: none; }
+:root[data-fullscreen="on"] #traffic-gap { display: none; }

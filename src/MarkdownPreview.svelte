@@ -65,7 +65,7 @@
     for (const img of el.querySelectorAll<HTMLImageElement>('img[src]')) {
       const src = img.getAttribute('src') ?? '';
       if (/^(https?:|data:|blob:)/i.test(src)) continue;
-      const path = dir || /^(file:|[a-zA-Z]:[\\/])/.test(src) ? resolveLocal(dir, src) : null;
+      const path = dir || /^(file:|[a-zA-Z]:[\\/]|\/)/.test(src) ? resolveLocal(dir, src) : null;
       if (!path) continue;
       void loadImage(path).then((url) => {
         if (stamp === renderedFor && url && img.isConnected) img.src = url;

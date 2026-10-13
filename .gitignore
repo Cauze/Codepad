@@ -4,3 +4,4 @@ src-tauri/target
 src-tauri/gen
 Codepad.exe
 .gitconfig
+.DS_Store

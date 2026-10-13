@@ -1,10 +1,21 @@
+#[cfg(feature = "e2e")]
+mod e2e;
+#[cfg(target_os = "macos")]
+mod menu;
+#[cfg(target_os = "macos")]
+mod quit_guard;
 mod shell;
 mod update;
 
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8, WINDOWS_1252};
 use serde::Serialize;
-use std::{fs, path::Path, time::UNIX_EPOCH};
-use tauri::{Emitter, Manager};
+use std::{
+    fs,
+    path::Path,
+    sync::{atomic::{AtomicBool, Ordering}, Mutex},
+    time::UNIX_EPOCH,
+};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 const MAX_BYTES: u64 = 20 * 1024 * 1024;
@@ -298,9 +309,36 @@ fn file_args<I: IntoIterator<Item = String>>(args: I, cwd: Option<&str>) -> Vec<
         .collect()
 }
 
+/// Files macOS hands to the app (double click in Finder, "Open With", dropping on the Dock icon) instead of
+/// putting them on the command line. Kept until the window asks for its starting files, because a cold
+/// start delivers them before the page has loaded.
+#[derive(Default)]
+struct PendingOpen {
+    files: Mutex<Vec<String>>,
+    booted: AtomicBool,
+}
+
 #[tauri::command]
-fn initial_files() -> Vec<String> {
-    file_args(std::env::args(), None)
+fn initial_files(pending: State<'_, PendingOpen>) -> Vec<String> {
+    let mut files = file_args(std::env::args(), None);
+    files.append(&mut pending.files.lock().unwrap());
+    pending.booted.store(true, Ordering::SeqCst);
+    files
+}
+
+/// Brings the window forward and tells it to open `paths` (it opens each file once, so repeats are harmless).
+#[cfg(target_os = "macos")]
+fn open_in_window(app: &tauri::AppHandle, paths: Vec<String>) {
+    let pending = app.state::<PendingOpen>();
+    if !pending.booted.load(Ordering::SeqCst) {
+        pending.files.lock().unwrap().extend(paths.iter().cloned());
+    }
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+    let _ = app.emit("open-files", paths);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -308,7 +346,7 @@ pub fn run() {
     if shell::handle_cli() {
         return;
     }
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.unminimize();
@@ -319,12 +357,27 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .manage(update::UpdateState::default())
-        .setup(|_| {
+        .manage(PendingOpen::default());
+    // The menu bar is part of a Mac app: it carries the shortcuts, and Cmd+C / Cmd+V need an Edit menu to work at all.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .menu(menu::build)
+        .on_menu_event(|app, event| {
+            let _ = app.emit("menu", event.id().as_ref());
+        });
+    let app = builder
+        .setup(|app| {
             std::thread::spawn(update::cleanup);
             std::thread::spawn(shell::heal);
+            #[cfg(target_os = "macos")]
+            quit_guard::install(app.handle());
+            #[cfg(feature = "e2e")]
+            e2e::start(app.handle().clone());
+            #[cfg(not(feature = "e2e"))]
+            let _ = app;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, write_file, save_dialog, read_image_data, open_external, shell::context_menu_enabled, shell::set_context_menu, shell::path_enabled, shell::set_path, file_mtime, initial_files,
+        .invoke_handler(tauri::generate_handler![read_file, write_file, save_dialog, read_image_data, open_external, shell::context_menu_enabled, shell::set_context_menu, shell::path_enabled, shell::set_path, shell::path_dir, file_mtime, initial_files,
             canonical_path,
             read_config,
             write_config,
@@ -333,8 +386,21 @@ pub fn run() {
             update::install_update,
             update::open_release_page
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Codepad");
+        .build(tauri::generate_context!())
+        .expect("error while building Codepad");
+
+    app.run(|app, event| match event {
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Opened { urls } => {
+            let paths: Vec<String> = urls.iter().filter_map(|u| u.to_file_path().ok()).filter(|p| p.is_file()).map(|p| canon(&p)).collect();
+            if !paths.is_empty() {
+                open_in_window(app, paths);
+            }
+        }
+        _ => {
+            let _ = app;
+        }
+    });
 }
 
 #[cfg(test)]

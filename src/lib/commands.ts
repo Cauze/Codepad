@@ -9,6 +9,7 @@ import { ENCODINGS, encodingLabel } from './encodings';
 import { openSearch } from './searchTabs.svelte';
 import { setMdView, togglePreview } from './markdown.svelte';
 import { errText, notify } from './notify.svelte';
+import { fileManager, isMac } from './platform';
 
 export interface Command extends Item {
   /** Hidden from the palette while this returns false. */
@@ -110,7 +111,12 @@ void invoke<boolean>('path_enabled').then((on) => { pathOn = on; }).catch(() => 
 async function setPath(enabled: boolean): Promise<void> {
   try {
     pathOn = await invoke<boolean>('set_path', { enabled });
-    notify(pathOn ? 'Added "codepad" to your PATH. Open a new terminal, then try: codepad file.txt' : 'Removed "codepad" from your PATH.');
+    const dir = pathOn ? await invoke<string | null>('path_dir').catch(() => null) : null;
+    // ~/.local/bin isn't on a Mac's PATH out of the box, so say where the command went
+    const hint = isMac && dir?.endsWith('/.local/bin') ? ` If the shell doesn't find it, add ${dir} to your PATH.` : '';
+    notify(pathOn
+      ? `${isMac && dir ? `Installed the "codepad" command in ${dir}.` : 'Added "codepad" to your PATH.'} Open a new terminal, then try: codepad file.txt${hint}`
+      : 'Removed "codepad" from your PATH.');
   } catch (e) {
     notify(`Couldn't change the PATH: ${errText(e)}`, 'error');
   }
@@ -188,7 +194,7 @@ export const commands: Command[] = [
 
   { title: 'Copy File Path', when: () => !!store.active && !store.active.untitled, run: () => store.active && void copyText(store.active.path) },
   {
-    title: 'Reveal in Explorer',
+    title: `Reveal in ${fileManager}`,
     when: () => !!store.active && !store.active.untitled,
     run: () => store.active && void invoke('reveal_in_explorer', { path: store.active.path }).catch(console.error),
   },
@@ -252,7 +258,7 @@ export const commands: Command[] = [
     when: () => pathOn === true,
     run: () => void setPath(false),
   },
-  { title: 'Open Settings File', run: () => void openPath(meta.settingsPath) },
+  { title: 'Open Settings File', keys: isMac ? 'Ctrl+,' : undefined, run: () => void openPath(meta.settingsPath) },
   { title: 'Close Codepad', keys: 'Ctrl+Q', run: () => void getCurrentWindow().close() },
 ];
 

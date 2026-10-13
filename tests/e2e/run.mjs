@@ -17,7 +17,8 @@ for (const file of files) {
   const out = (r.stdout ?? '') + (r.stderr ?? '');
   process.stdout.write(out);
   const m = /(\d+) passed, (\d+) failed/.exec(out);
-  results.push({ file, passed: m ? +m[1] : 0, failed: m ? +m[2] : 1, code: r.status, skipped: /^SKIP /m.test(out) });
+  const skipped = /^SKIP /m.test(out) && !m; // a file that only prints SKIP has nothing to run on this machine
+  results.push({ file, passed: m ? +m[1] : 0, failed: m ? +m[2] : skipped ? 0 : 1, code: r.status, skipped });
   if (r.status === 2) break; // setup problem (exe missing, Codepad already running): no point continuing
 }
 

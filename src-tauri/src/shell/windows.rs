@@ -8,22 +8,9 @@
 //!
 //! 2. `codepad` on the PATH, so `codepad notes.txt` works in any terminal (see the `path` section below).
 
+use super::EXTENSIONS;
 use std::{fs, path::{Path, PathBuf}};
 use winreg::{enums::*, RegKey};
-
-const EXTENSIONS: &[&str] = &[
-    // text and data
-    "txt", "text", "log", "md", "markdown", "rst", "tex", "csv", "tsv", "json", "jsonc", "json5", "jsonld", "toml", "yaml", "yml",
-    "ini", "cfg", "conf", "env", "properties", "xml", "xsd", "xsl", "diff", "patch", "lock", "gitignore", "gitattributes", "editorconfig",
-    // web
-    "html", "htm", "css", "scss", "sass", "less", "svg", "js", "mjs", "cjs", "jsx", "ts", "mts", "cts", "tsx", "vue", "svelte", "astro", "graphql", "gql",
-    // languages
-    "py", "pyw", "rs", "go", "c", "h", "cc", "cpp", "cxx", "hpp", "hh", "hxx", "cs", "java", "kt", "kts", "scala", "groovy", "gradle",
-    "swift", "dart", "lua", "rb", "php", "pl", "pm", "r", "jl", "hs", "ml", "mli", "fs", "clj", "cljs", "edn", "el", "lisp", "scm", "erl",
-    "ex", "exs", "elm", "zig", "nim", "vb", "vbs", "sv", "vhd", "vhdl", "tcl", "tf", "hcl", "nix", "wat", "proto", "sql", "cmake",
-    // shells and scripts
-    "sh", "bash", "zsh", "ksh", "bat", "cmd", "ps1", "psm1", "psd1",
-];
 
 const CLASSES: &str = r"Software\Classes\SystemFileAssociations";
 
@@ -35,7 +22,7 @@ fn command(exe: &PathBuf) -> String {
     format!("\"{}\" \"%1\"", exe.display())
 }
 
-pub fn register() -> Result<(), String> {
+fn register() -> Result<(), String> {
     let exe = exe()?;
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let cmd = command(&exe);
@@ -51,7 +38,7 @@ pub fn register() -> Result<(), String> {
 }
 
 /// Removes every Codepad entry, including the all-files one that 0.4.0 and 0.4.1 added.
-pub fn unregister() -> Result<(), String> {
+fn unregister() -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let _ = hkcu.delete_subkey_all(r"Software\Classes\*\shell\Codepad");
     let Ok(classes) = hkcu.open_subkey_with_flags(CLASSES, KEY_READ | KEY_WRITE) else { return Ok(()) };
@@ -67,7 +54,7 @@ pub fn unregister() -> Result<(), String> {
     Ok(())
 }
 
-pub fn is_registered() -> bool {
+fn is_registered() -> bool {
     RegKey::predef(HKEY_CURRENT_USER).open_subkey(format!(r"{CLASSES}\.txt\shell\Codepad\command")).is_ok()
 }
 
@@ -143,7 +130,7 @@ fn to_wide(s: &str) -> std::borrow::Cow<'static, [u8]> {
     v.into()
 }
 
-pub fn register_path() -> Result<(), String> {
+fn register_path() -> Result<(), String> {
     let exe = exe()?;
     let dir = bin_dir()?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -157,7 +144,7 @@ pub fn register_path() -> Result<(), String> {
     })
 }
 
-pub fn unregister_path() -> Result<(), String> {
+fn unregister_path() -> Result<(), String> {
     let dir = bin_dir()?;
     edit_path(|parts| parts.into_iter().filter(|p| !same_dir(p, &dir)).collect())?;
     let _ = fs::remove_file(dir.join("codepad.cmd"));
@@ -166,7 +153,7 @@ pub fn unregister_path() -> Result<(), String> {
     Ok(())
 }
 
-pub fn is_path_registered() -> bool {
+fn is_path_registered() -> bool {
     let Ok(dir) = bin_dir() else { return false };
     let on_path = RegKey::predef(HKEY_CURRENT_USER)
         .open_subkey("Environment")
@@ -203,52 +190,32 @@ pub fn handle_cli() -> bool {
     }
 }
 
-#[tauri::command]
-pub fn context_menu_enabled() -> bool {
-    is_registered()
+pub fn menu_enabled() -> Result<bool, String> {
+    Ok(is_registered())
 }
 
-#[tauri::command]
-pub fn set_context_menu(enabled: bool) -> Result<bool, String> {
+pub fn set_menu(enabled: bool) -> Result<bool, String> {
     if enabled { register()? } else { unregister()? }
     Ok(is_registered())
 }
 
-#[tauri::command]
 pub fn path_enabled() -> bool {
     is_path_registered()
 }
 
-#[tauri::command]
 pub fn set_path(enabled: bool) -> Result<bool, String> {
     if enabled { register_path()? } else { unregister_path()? }
     Ok(is_path_registered())
 }
 
+/// The folder the `codepad` launchers live in.
+pub fn path_dir() -> Option<PathBuf> {
+    bin_dir().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
-
-    #[test]
-    fn extensions_are_plain_lowercase_and_unique() {
-        let mut seen = HashSet::new();
-        for ext in EXTENSIONS {
-            assert!(!ext.is_empty() && !ext.starts_with('.'), "{ext:?} should be written without the dot");
-            assert_eq!(*ext, ext.to_ascii_lowercase(), "{ext:?} should be lowercase");
-            assert!(seen.insert(*ext), "{ext:?} is listed twice");
-        }
-    }
-
-    #[test]
-    fn menu_covers_text_and_code_but_not_binaries() {
-        for ext in ["txt", "md", "json", "rs", "ts", "py", "html", "css", "sh", "ps1"] {
-            assert!(EXTENSIONS.contains(&ext), "{ext} should get the menu entry");
-        }
-        for ext in ["png", "jpg", "mp4", "exe", "dll", "zip", "pdf", "docx"] {
-            assert!(!EXTENSIONS.contains(&ext), "{ext} should not get the menu entry");
-        }
-    }
 
     #[test]
     fn menu_command_quotes_exe_and_file() {

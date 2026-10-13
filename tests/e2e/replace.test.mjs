@@ -1,7 +1,7 @@
 // The replace row of the find widget: read-only vs editable, replace one/all, case, regex capture groups.
 import fs from 'node:fs';
 import path from 'node:path';
-import { suite, sleep, CTRL, ALT, DIR, f } from './harness.mjs';
+import { suite, sleep, CTRL, ALT, DIR, f, IS_MAC } from './harness.mjs';
 
 const file = path.join(DIR, 'r.txt');
 fs.writeFileSync(file, 'foo bar foo\nfoo\nFoo\n');
@@ -13,6 +13,8 @@ suite('Find and replace', { args: ['r.txt'], settings: { editable: false }, size
   const focusedPlaceholder = () => ev(`document.activeElement?.placeholder ?? null`);
   const clickBtn = async (label) => { await ev(`[...document.querySelectorAll('.find button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(label)}).click()`); await sleep(250); };
   const closeFind = () => key('Escape', 'Escape', 27);
+  // Ctrl+H on Windows; on a Mac Cmd+H hides the app, so replace is Cmd+Option+F
+  const openReplace = () => (IS_MAC ? key('f', 'KeyF', 70, CTRL | ALT) : key('h', 'KeyH', 72, CTRL));
 
   await ev(`document.querySelector('.cm-content').focus()`);
 
@@ -20,7 +22,7 @@ suite('Find and replace', { args: ['r.txt'], settings: { editable: false }, size
   await key('f', 'KeyF', 70, CTRL);
   check('read-only: find opens', await vis('.find'));
   check('read-only: no replace toggle', !(await vis('.find-toggle')));
-  await key('h', 'KeyH', 72, CTRL);
+  await openReplace();
   check('read-only: Ctrl+H does not open the replace row', !(await vis('.find-row:nth-child(2)')));
   await closeFind();
 
@@ -30,7 +32,7 @@ suite('Find and replace', { args: ['r.txt'], settings: { editable: false }, size
   await key('f', 'KeyF', 70, CTRL);
   check('editable: replace toggle shown', await vis('.find-toggle'));
   check('editable: replace row collapsed at first', !(await vis('.find-rows .find-row:nth-child(2)')));
-  await key('h', 'KeyH', 72, CTRL);
+  await openReplace();
   check('Ctrl+H expands the replace row and focuses it', (await vis('.find-rows .find-row:nth-child(2)')) && (await focusedPlaceholder()) === 'Replace');
   await send('Input.insertText', { text: 'X' });
   await key('f', 'KeyF', 70, CTRL);
@@ -67,7 +69,7 @@ suite('Find and replace', { args: ['r.txt'], settings: { editable: false }, size
   await ev(`document.querySelectorAll('.find-box input')[1].focus()`);
   await key('a', 'KeyA', 65, CTRL);
   await send('Input.insertText', { text: '$2$1!' });
-  await clickBtn('Replace All (Ctrl+Alt+Enter)');
+  await clickBtn(IS_MAC ? 'Replace All (⌥⌘Enter)' : 'Replace All (Ctrl+Alt+Enter)');
   txt = await docText();
   check('regex replace supports $1 / $2', txt.startsWith('X ab! X'), JSON.stringify(txt));
 

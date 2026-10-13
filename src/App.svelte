@@ -3,6 +3,8 @@
   import { appState, settings } from './lib/config.svelte';
   import * as editor from './lib/editor';
   import { handleKeydown, handleWheel } from './lib/keys';
+  import { listenToMenu } from './lib/menu';
+  import { isMac } from './lib/platform';
   import { applyEditorSettings, baseName, boot, onEdit, openPath, setStatus, startWatching, store } from './lib/tabs.svelte';
   import Dialog from './Dialog.svelte';
   import MarkdownPreview from './MarkdownPreview.svelte';
@@ -13,7 +15,9 @@
   import TitleBar from './TitleBar.svelte';
   import UpdateNotice from './UpdateNotice.svelte';
 
-  const DEFAULT_MONO = "'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace";
+  const DEFAULT_MONO = isMac
+    ? "'SF Mono', Menlo, Monaco, 'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace"
+    : "'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, monospace";
 
   let host: HTMLDivElement;
 
@@ -30,6 +34,7 @@
     // Not via <svelte:window>: a window-level wheel listener is passive there, and we need preventDefault.
     window.addEventListener('wheel', handleWheel, { passive: false });
     startWatching(() => { /* settings effects below react on their own */ });
+    if (isMac) void listenToMenu();
     void boot();
     return () => {
       systemLight.removeEventListener('change', onOs);

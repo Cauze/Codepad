@@ -1,3 +1,4 @@
+import { resolveLocal } from './paths';
 import { invoke } from '@tauri-apps/api/core';
 import DOMPurify from 'dompurify';
 import { Marked, type Token, type Tokens } from 'marked';
@@ -50,24 +51,7 @@ export function renderMarkdown(src: string): string {
 
 /* ---------- local images & links ---------- */
 
-/** Resolve `src` (relative to the Markdown file's folder) to an absolute Windows path, or null if it isn't a local file. */
-export function resolveLocal(baseDir: string, src: string): string | null {
-  let rel = src.trim();
-  if (/^[a-z][a-z0-9+.-]*:/i.test(rel) && !/^(file:|[a-zA-Z]:[\\/])/.test(rel)) return null; // http:, data:, mailto: ...
-  rel = rel.replace(/^file:\/+/i, '');
-  rel = rel.split(/[?#]/)[0] ?? '';
-  try { rel = decodeURIComponent(rel); } catch { /* leave it as written */ }
-  if (!rel) return null;
-  const absolute = /^[a-zA-Z]:[\\/]/.test(rel) || rel.startsWith('\\\\');
-  const full = absolute ? rel : baseDir + rel;
-  const unc = full.startsWith('\\\\');
-  const out: string[] = [];
-  for (const part of full.split(/[\\/]+/)) {
-    if (part === '.' || part === '') continue;
-    if (part === '..') { if (out.length > 1) out.pop(); } else out.push(part);
-  }
-  return (unc ? '\\\\' : '') + out.join('\\');
-}
+export { resolveLocal };
 
 const imageCache = new Map<string, Promise<string | null>>();
 export const clearImageCache = (): void => imageCache.clear();

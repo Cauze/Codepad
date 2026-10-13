@@ -1,9 +1,11 @@
-// `codepad file` from a terminal: "Add codepad to PATH" in the palette, the launchers, warm and cold starts, removal.
+// `codepad file` from a terminal on Windows: "Add codepad to PATH" in the palette, the launchers, warm and cold starts, removal.
 // Edits the user's PATH, so it skips itself if "codepad" is already on it (that's yours, not ours).
 import { spawn, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { suite, sleep, f, DIR } from './harness.mjs';
+
+if (process.platform !== 'win32') { console.log('SKIP  this one is for Windows (see command-line.macos.test.mjs)'); process.exit(0); }
 
 const BIN = path.join(process.env.LOCALAPPDATA ?? '', 'Codepad', 'bin');
 const GIT_BASH = 'C:\\Program Files\\Git\\bin\\bash.exe';

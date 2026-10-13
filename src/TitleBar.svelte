@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { fmt, isMac } from './lib/platform';
   import { activate, closeTab, dirName, newFile, store, type Tab } from './lib/tabs.svelte';
 
   const win = getCurrentWindow();
@@ -27,6 +28,7 @@
 </script>
 
 <header id="titlebar">
+  {#if isMac}<div id="traffic-gap" data-tauri-drag-region></div>{/if}
   <div id="tabs" role="tablist" bind:this={tabsEl}>
     {#each store.tabs as tb (tb)}
       <div
@@ -51,11 +53,12 @@ Changed on disk since you opened it` : tb.path}
     {/each}
   </div>
 
-  <button id="add" title="New file (Ctrl+N)" aria-label="New file" onclick={newFile}>
+  <button id="add" title={fmt('New file (Ctrl+N)')} aria-label="New file" onclick={newFile}>
     <svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3" fill="none" /></svg>
   </button>
   <div class="spacer" data-tauri-drag-region></div>
 
+  {#if !isMac}
   <div id="winctl">
     <button id="win-min" aria-label="Minimize" onclick={() => void win.minimize()}>
       <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" fill="none" /></svg>
@@ -67,4 +70,5 @@ Changed on disk since you opened it` : tb.path}
       <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" fill="none" /></svg>
     </button>
   </div>
+  {/if}
 </header>

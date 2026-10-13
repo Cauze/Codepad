@@ -7,6 +7,7 @@ import { SearchQuery, closeSearchPanel, findNext, findPrevious, getSearchQuery, 
  * CodeMirror still owns the query state, match highlighting and next/previous; this is only the UI.
  * The replace row only exists while the file is editable.
  */
+import { fmt, hasMod, isMac, letter } from './platform';
 
 const MAX_COUNT = 10_000; // stop counting here so a huge file with a one-letter query stays responsive
 
@@ -23,7 +24,7 @@ const ICON = {
 let replaceOpen = false; // remembered across panels, like VS Code
 const panels = new WeakMap<EditorView, { showReplace(): void }>();
 
-/** Ctrl+H: open find with the replace row expanded and focus it. No-op while the file is read-only. */
+/** Ctrl+H (Cmd+Option+F on a Mac, where Cmd+H hides the app): open find with the replace row expanded and focus it. No-op while the file is read-only. */
 export function openReplace(view: EditorView): boolean {
   if (view.state.readOnly) return false;
   openSearchPanel(view);
@@ -57,9 +58,9 @@ export function createFindPanel(view: EditorView): Panel {
   input.setAttribute('main-field', 'true'); // CodeMirror's Ctrl+F looks for this to refocus us
   input.setAttribute('aria-label', 'Find');
 
-  const bCase = button('Aa', 'Match Case (Alt+C)');
-  const bWord = button('ab', 'Match Whole Word (Alt+W)');
-  const bRegex = button('.*', 'Use Regular Expression (Alt+R)');
+  const bCase = button('Aa', fmt('Match Case (Alt+C)'));
+  const bWord = button('ab', fmt('Match Whole Word (Alt+W)'));
+  const bRegex = button('.*', fmt('Use Regular Expression (Alt+R)'));
   const box = document.createElement('div');
   box.className = 'find-box';
   box.append(input, bCase, bWord, bRegex);
@@ -75,14 +76,14 @@ export function createFindPanel(view: EditorView): Panel {
   rBox.className = 'find-box';
   rBox.append(rInput);
   const bReplace = button('Replace', 'Replace (Enter)');
-  const bAll = button('All', 'Replace All (Ctrl+Alt+Enter)');
+  const bAll = button('All', fmt('Replace All (Ctrl+Alt+Enter)'));
   bReplace.classList.add('txt');
   bAll.classList.add('txt');
   const rRow = document.createElement('div');
   rRow.className = 'find-row';
   rRow.append(rBox, bReplace, bAll);
 
-  const bToggle = button('', 'Toggle Replace (Ctrl+H)', ICON.right);
+  const bToggle = button('', isMac ? 'Toggle Replace (⌥⌘F)' : 'Toggle Replace (Ctrl+H)', ICON.right);
   bToggle.classList.add('find-toggle');
 
   const count = document.createElement('span');
@@ -180,27 +181,27 @@ export function createFindPanel(view: EditorView): Panel {
   rInput.addEventListener('input', () => view.dispatch({ effects: setSearchQuery.of(currentQuery()) }));
   // Keys shared by both fields.
   const common = (e: KeyboardEvent): boolean => {
-    const k = e.key.toLowerCase();
+    const k = letter(e);
     if (e.key === 'Escape') { e.preventDefault(); closeSearchPanel(view); view.focus(); }
     else if (e.altKey && k === 'c') { e.preventDefault(); toggle('case'); }
     else if (e.altKey && k === 'w') { e.preventDefault(); toggle('word'); }
     else if (e.altKey && k === 'r') { e.preventDefault(); toggle('regex'); }
-    else if ((e.ctrlKey || e.metaKey) && k === 'h') { e.preventDefault(); openReplace(view); }
+    else if (hasMod(e) && (isMac ? e.altKey && k === 'f' : k === 'h')) { e.preventDefault(); openReplace(view); }
     else if (e.key === 'F3') { e.preventDefault(); (e.shiftKey ? findPrevious : findNext)(view); }
     else return false;
     return true;
   };
   rInput.addEventListener('keydown', (e) => {
     if (common(e)) return;
-    if (e.key === 'Enter') { e.preventDefault(); (e.ctrlKey && e.altKey ? replaceAll : replaceNext)(view); }
-    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); input.focus(); input.select(); }
+    if (e.key === 'Enter') { e.preventDefault(); (hasMod(e) && e.altKey ? replaceAll : replaceNext)(view); }
+    else if (hasMod(e) && letter(e) === 'f') { e.preventDefault(); input.focus(); input.select(); }
   });
   input.addEventListener('keydown', (e) => {
     if (common(e)) return;
     const k = e.key;
-    if (k === 'Enter' && e.ctrlKey && e.altKey) { e.preventDefault(); replaceAll(view); }
+    if (k === 'Enter' && hasMod(e) && e.altKey) { e.preventDefault(); replaceAll(view); }
     else if (k === 'Enter') { e.preventDefault(); (e.shiftKey ? findPrevious : findNext)(view); }
-    else if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'f') { e.preventDefault(); input.select(); }
+    else if (hasMod(e) && letter(e) === 'f') { e.preventDefault(); input.select(); }
   });
   bCase.addEventListener('click', () => toggle('case'));
   bWord.addEventListener('click', () => toggle('word'));

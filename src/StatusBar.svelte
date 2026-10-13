@@ -4,6 +4,7 @@
   import { encodingMenu } from './lib/commands';
   import { setMdView } from './lib/markdown.svelte';
   import { encodingLabel } from './lib/encodings';
+  import { fmt } from './lib/platform';
   import { showUpdateNotice, upd } from './lib/update.svelte';
 </script>
 
@@ -26,7 +27,7 @@
     <span id="st-md" role="group" aria-label="Markdown view">
       <button class:on={tb.view === 'code'} onclick={() => void setMdView(tb, 'code')} title="Show the text only">Code</button>
       <button class:on={tb.view === 'split'} onclick={() => void setMdView(tb, 'split')} title="Text and preview side by side">Split</button>
-      <button class:on={tb.view === 'preview'} onclick={() => void setMdView(tb, 'preview')} title="Show the rendered page (Ctrl+Shift+V)">Preview</button>
+      <button class:on={tb.view === 'preview'} onclick={() => void setMdView(tb, 'preview')} title={fmt('Show the rendered page (Ctrl+Shift+V)')}>Preview</button>
     </span>
   {/if}
   <span id="st-lang">{store.active?.lang ?? ''}</span>

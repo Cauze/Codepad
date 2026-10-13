@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { keyCaps } from './lib/platform';
   import { closePalette, choose, onPaletteKeydown, pal, paletteView } from './lib/palette.svelte';
 
   let input: HTMLInputElement;
@@ -49,7 +50,7 @@
           >
             <span class="pt">{#each row.segs as seg}{#if seg.hit}<b>{seg.text}</b>{:else}{seg.text}{/if}{/each}</span>
             {#if row.item.detail}<span class="pd">{row.item.detail}</span>{/if}
-            {#if row.item.keys}<span class="pk">{#each row.item.keys.split('+') as k}<kbd>{k}</kbd>{/each}</span>{/if}
+            {#if row.item.keys}<span class="pk">{#each keyCaps(row.item.keys) as k}<kbd>{k}</kbd>{/each}</span>{/if}
           </li>
         {/each}
       {/if}

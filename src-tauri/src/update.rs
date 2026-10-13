@@ -4,7 +4,8 @@
 //! `install_update` then downloads *that remembered asset* (the frontend never supplies a URL),
 //! checks its SHA-256 against the digest GitHub publishes, and swaps it in:
 //!   - installed build: runs the NSIS setup (`/P` passive, `/R` relaunch) and exits;
-//!   - portable build: renames the running exe aside, drops the new one in its place, relaunches.
+//!   - portable build: renames the running exe aside, drops the new one in its place, relaunches;
+//!   - macOS: unpacks the `.app.tar.gz` next to the running app, swaps the two bundles and relaunches.
 
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -124,11 +125,14 @@ fn fetch_latest(portable: bool) -> Result<Option<UpdateInfo>, String> {
         return Ok(None);
     }
 
-    let suffix = if portable { "-portable.exe" } else { "-setup.exe" };
+    #[cfg(target_os = "macos")]
+    let (suffix, what) = (".app.tar.gz", "macOS");
+    #[cfg(not(target_os = "macos"))]
+    let (suffix, what) = if portable { ("-portable.exe", "portable") } else { ("-setup.exe", "installer") };
     let asset = rel["assets"]
         .as_array()
         .and_then(|a| a.iter().find(|x| x["name"].as_str().is_some_and(|n| n.ends_with(suffix))))
-        .ok_or_else(|| format!("Version {} is out, but it has no {} download yet.", tag.trim_start_matches('v'), if portable { "portable" } else { "installer" }))?;
+        .ok_or_else(|| format!("Version {} is out, but it has no {what} download yet.", tag.trim_start_matches('v')))?;
 
     Ok(Some(UpdateInfo {
         version: tag.trim_start_matches('v').to_string(),
@@ -225,7 +229,7 @@ fn relaunch_later(exe: &Path) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(target_os = "macos")))]
 fn relaunch_later(exe: &Path) -> Result<(), String> {
     std::process::Command::new("sh")
         .arg("-c")
@@ -236,6 +240,7 @@ fn relaunch_later(exe: &Path) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+#[cfg(not(target_os = "macos"))]
 fn install(app: &AppHandle, info: &UpdateInfo) -> Result<(), String> {
     if !download_allowed(&info.asset_url) {
         return Err("Refusing to download from an unexpected address.".into());
@@ -275,6 +280,98 @@ fn install(app: &AppHandle, info: &UpdateInfo) -> Result<(), String> {
     Ok(())
 }
 
+/// Runs a system tool, turning a failure into a message.
+#[cfg(target_os = "macos")]
+fn run_tool(what: &str, cmd: &mut std::process::Command) -> Result<String, String> {
+    let out = cmd.output().map_err(|e| format!("Couldn't {what} ({e})."))?;
+    if !out.status.success() {
+        return Err(format!("Couldn't {what}: {}", String::from_utf8_lossy(&out.stderr).trim()));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Starts the app bundle again once this process has had time to exit (LaunchServices would otherwise just refocus us).
+#[cfg(target_os = "macos")]
+fn relaunch_later(bundle: &Path) -> Result<(), String> {
+    let mut cmd = std::process::Command::new("/bin/sh");
+    // `sh -c SCRIPT sh ARGS...`: the script sees ARGS as "$@"
+    cmd.arg("-c").arg("sleep 2; exec /usr/bin/open \"$@\"").arg("sh");
+    // The end-to-end tests keep the app on their throw-away HOME, and its test bridge, across the restart.
+    #[cfg(feature = "e2e")]
+    for key in ["HOME", "CODEPAD_E2E_PORT"] {
+        if let Some(value) = std::env::var_os(key) {
+            cmd.arg("--env").arg(format!("{key}={}", value.to_string_lossy()));
+        }
+    }
+    cmd.arg(bundle).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Where the new app is unpacked: beside the running one, so the swap below is a rename on one volume.
+#[cfg(target_os = "macos")]
+fn staging_dir(bundle: &Path) -> PathBuf {
+    bundle.with_file_name(".Codepad-update")
+}
+
+/// Unpacks the download, checks that it is a whole, intact Codepad of the version GitHub said it is, and
+/// returns the path of the new `.app`.
+#[cfg(target_os = "macos")]
+fn unpack(archive: &Path, staging: &Path, want_version: &str) -> Result<PathBuf, String> {
+    use std::process::Command;
+    run_tool("unpack the update", Command::new("/usr/bin/tar").arg("-xzf").arg(archive).arg("-C").arg(staging))?;
+    let fresh = fs::read_dir(staging)
+        .map_err(|e| e.to_string())?
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| p.extension().is_some_and(|x| x == "app") && p.is_dir())
+        .ok_or("The download doesn't contain an app.")?;
+    run_tool("verify the new app", Command::new("/usr/bin/codesign").args(["--verify", "--deep", "--strict"]).arg(&fresh))?;
+    let version = run_tool(
+        "read the new app's version",
+        Command::new("/usr/libexec/PlistBuddy").args(["-c", "Print :CFBundleShortVersionString"]).arg(fresh.join("Contents/Info.plist")),
+    )?;
+    if version != want_version {
+        return Err(format!("The download is version {version}, not {want_version}."));
+    }
+    // We fetched it ourselves, so it has no quarantine flag; make sure nothing else added one.
+    let _ = Command::new("/usr/bin/xattr").args(["-dr", "com.apple.quarantine"]).arg(&fresh).output();
+    Ok(fresh)
+}
+
+#[cfg(target_os = "macos")]
+fn install(app: &AppHandle, info: &UpdateInfo) -> Result<(), String> {
+    if !download_allowed(&info.asset_url) {
+        return Err("Refusing to download from an unexpected address.".into());
+    }
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let manual = "Download the new version from the release page instead.";
+    let bundle = crate::shell::bundle_of(&exe).ok_or_else(|| format!("Codepad isn't running from an app bundle, so it can't replace itself. {manual}"))?;
+    let staging = staging_dir(&bundle);
+    let _ = fs::remove_dir_all(&staging);
+    fs::create_dir(&staging).map_err(|e| format!("Can't write to {} ({e}). {manual}", bundle.parent().unwrap_or(&bundle).display()))?;
+
+    let swapped = (|| {
+        let archive = staging.join("update.tar.gz");
+        download(app, info, &archive)?;
+        let fresh = unpack(&archive, &staging, &info.version)?;
+        let old = sibling(&bundle, ".old");
+        let _ = fs::remove_dir_all(&old);
+        fs::rename(&bundle, &old).map_err(|e| format!("Couldn't replace the running app ({e}). {manual}"))?;
+        if let Err(e) = fs::rename(&fresh, &bundle) {
+            let _ = fs::rename(&old, &bundle); // put the old one back
+            return Err(format!("Couldn't put the new app in place ({e})."));
+        }
+        Ok(())
+    })();
+    let _ = fs::remove_dir_all(&staging);
+    swapped?;
+
+    if let Err(e) = relaunch_later(&bundle) {
+        return Err(format!("Updated, but couldn't restart automatically ({e}). Start Codepad again."));
+    }
+    app.exit(0);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn install_update(app: AppHandle, state: State<'_, UpdateState>) -> Result<(), String> {
     let info = state.0.lock().unwrap().clone().ok_or("No update has been found yet.")?;
@@ -302,6 +399,11 @@ pub fn cleanup() {
     if let Ok(exe) = std::env::current_exe() {
         let _ = fs::remove_file(sibling(&exe, ".old"));
         let _ = fs::remove_file(sibling(&exe, ".new"));
+        #[cfg(target_os = "macos")]
+        if let Some(bundle) = crate::shell::bundle_of(&exe) {
+            let _ = fs::remove_dir_all(sibling(&bundle, ".old"));
+            let _ = fs::remove_dir_all(staging_dir(&bundle));
+        }
     }
     let _ = fs::remove_dir_all(std::env::temp_dir().join("codepad-update"));
 }
