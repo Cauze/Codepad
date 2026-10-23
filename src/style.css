@@ -304,5 +304,5 @@ kbd { font: 11.5px var(--mono); padding: 2px 6px; border: 1px solid var(--border
   --mono: 'SF Mono', Menlo, Monaco, 'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace;
   --ui: -apple-system, 'SF Pro Text', system-ui, sans-serif;
 }
-#traffic-gap { width: 78px; flex: none; }
+#traffic-gap { width: 80px; flex: none; }
 :root[data-fullscreen="on"] #traffic-gap { display: none; }
